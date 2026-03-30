@@ -1,0 +1,42 @@
+# ============================================================
+# 即梦内容工厂 配置文件
+# 使用前：复制为 config.yaml，根据本地环境修改路径
+# ============================================================
+
+web:
+  host: "127.0.0.1"
+  port: 8001
+
+# --- 本地路径（每台电脑不同，必须改） ---
+paths:
+  data_dir: "data/products"           # 产品数据目录
+  output_dir: "outputs"               # 视频下载目录
+  database_path: "runtime/app.db"     # SQLite 数据库路径
+
+video:
+  default_duration_seconds: 10        # 可选：5 / 10
+  max_images: 3
+  max_retries: 2
+  task_timeout_seconds: 1800
+
+  # 即梦页面固定参数
+  jimeng_defaults:
+    mode: "视频生成"
+    model: "Seedance 2.0 Fast"
+    reference_type: "全能参考"
+    aspect_ratio: "9:16"
+    # duration 从 video.default_duration_seconds 读取，运营提交时可覆盖
+
+providers:
+  jimeng:
+    enabled: true
+    base_url: "https://jimeng.jianying.com/ai-tool/home?type=video&workspace=0"
+
+    # --- 本地路径（每台电脑不同，必须改） ---
+    space_data_dir: "%APPDATA%/mul-key-chrome/SpaceData"
+    browser_executable_path: "E:\\多空间浏览器\\mul-key-chrome\\多空间浏览器.exe"
+
+    cdp_url: "http://127.0.0.1:9222"
+    web_port: 3000
+    default_concurrency: 10           # 即梦系统限制：每账号最多10个并发生成
+    accounts: []                      # 留空则从 spaces.json 自动发现
