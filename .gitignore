@@ -10,9 +10,9 @@ node_modules/
 frontend/dist/
 
 # Runtime data (not code)
-runtime/
-outputs/
-data/products/
+/runtime/
+/outputs/
+/data/products/
 
 # IDE
 .vscode/
