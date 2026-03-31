@@ -58,7 +58,7 @@ class Scheduler:
                     result = await self.provider.submit_job(
                         account=acct_cfg,
                         prompt=task.prompt,
-                        image_paths=[],
+                        image_paths=[],  # TODO: Phase 4 — wire in data_dir/product_name images
                     )
                 except asyncio.CancelledError:
                     self.storage.update_generating_count(account_name, delta=-1)
@@ -72,7 +72,6 @@ class Scheduler:
                         increment_retry=True,
                     )
                     self.storage.update_generating_count(account_name, delta=-1)
-                    submitted.append(task.task_id)
                     continue
 
                 if result.get("ok"):

@@ -14,7 +14,7 @@ paths:
   database_path: "runtime/app.db"     # SQLite 数据库路径
 
 video:
-  default_duration_seconds: 10        # 可选：5 / 10
+  default_duration_seconds: 10        # 可选：5 / 15
   max_images: 3
   max_retries: 2
   task_timeout_seconds: 1800
