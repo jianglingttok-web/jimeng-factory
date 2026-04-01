@@ -29,4 +29,6 @@ class Task(BaseModel):
     max_retries: int = 2
     created_at: float = Field(default_factory=time.time)
     updated_at: float = Field(default_factory=time.time)
+    submitted_at: float | None = None
+    result_url: str | None = None
     duration_seconds: int | None = None

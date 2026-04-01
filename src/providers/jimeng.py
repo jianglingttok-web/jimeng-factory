@@ -14,7 +14,7 @@ from urllib import request as urllib_request
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import Browser, BrowserContext, Locator, Page, Playwright, async_playwright
 
-from config import AppConfig, JimengAccountConfig
+from src.config import AppConfig, JimengAccountConfig
 
 # ── Selectors ────────────────────────────────────────────────────────────────
 
@@ -91,6 +91,93 @@ _CDP_ACTIVATION_LOCKS: dict[str, asyncio.Lock] = {}
 
 logger = logging.getLogger(__name__)
 
+# ── Harvest helpers ───────────────────────────────────────────────────────────
+
+# JavaScript injected via page.evaluate to query Jimeng's generation history.
+# Runs inside the page context so auth cookies are used automatically.
+# Tries multiple known endpoint paths; logs which one succeeds.
+# Returns a list of {url, created_at, title} for completed videos.
+_LIST_COMPLETED_JS = """
+async (since_ts) => {
+    const ENDPOINTS = [
+        ['/mweb/v1/query_video_generator_list',        {size: 50, sort_type: 1}],
+        ['/mweb/v1/query_generate_task_list',          {page_size: 50}],
+        ['/mweb/v1/batch_query_generate_video',        {size: 50}],
+        ['/mweb/v1/list_generate_record',              {page_size: 50}],
+        ['/mweb/v1/query_batch_record_with_task',      {size: 50}],
+    ];
+
+    const SUCCESS_STATUSES = new Set([
+        'generate_success', 'success', 'succeed', 'completed', 'done',
+    ]);
+
+    for (const [path, body] of ENDPOINTS) {
+        let data;
+        try {
+            const r = await fetch('https://jimeng.jianying.com' + path, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                credentials: 'include',
+                body: JSON.stringify(body),
+            });
+            if (!r.ok) continue;
+            const json = await r.json();
+            data = json?.data;
+            if (!data) continue;
+        } catch(e) {
+            continue;
+        }
+
+        // Try known list keys
+        const list = data.generate_list || data.items || data.tasks
+                     || data.list || data.records || data.results;
+        if (!Array.isArray(list) || list.length === 0) continue;
+
+        const results = [];
+        for (const item of list) {
+            const status = (item.status || '').toLowerCase().replace(/[_\\s]/g, '_');
+            if (!SUCCESS_STATUSES.has(status)) continue;
+
+            // Extract timestamp (seconds)
+            let ts = item.create_time || item.finish_time
+                     || item.created_at || item.updated_at || 0;
+            if (ts > 1e12) ts = ts / 1000;  // ms → s
+            if (ts < since_ts) continue;
+
+            // Extract video URL
+            const url = item.video_url || item.url
+                || item.result?.video_url
+                || item.videos?.[0]?.url
+                || item.output?.url || '';
+            if (!url) continue;
+
+            results.push({
+                url,
+                created_at: ts,
+                title: item.title || item.name || item.id || '',
+            });
+        }
+
+        console.log('[jimeng-factory] list_completed via ' + path + ': ' + results.length + ' results');
+        return results;
+    }
+
+    console.warn('[jimeng-factory] list_completed: all endpoints failed or returned no data');
+    return [];
+}
+"""
+
+
+def _download_url_sync(url: str, dest_path: str) -> None:
+    """Synchronous download helper (run via asyncio.to_thread)."""
+    req = urllib_request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0 jimeng-factory/1.0"},
+    )
+    with urllib_request.urlopen(req, timeout=120) as response:  # noqa: S310
+        data = response.read()
+    Path(dest_path).write_bytes(data)
+
 
 @dataclass
 class SessionHandle:
@@ -99,6 +186,29 @@ class SessionHandle:
     context: BrowserContext
     page: Page
     created_page: bool
+
+
+# ── Public API return types ───────────────────────────────────────────────────
+
+@dataclass
+class SubmitReceipt:
+    ok: bool
+    error: Optional[str] = None
+
+
+@dataclass
+class RemoteResult:
+    """A completed video available for download on the Jimeng platform."""
+    url: str
+    created_at: float  # unix timestamp when generation completed
+    title: str = ""
+
+
+@dataclass
+class DownloadReceipt:
+    ok: bool
+    path: Optional[str] = None  # absolute local path if ok
+    error: Optional[str] = None
 
 
 class JimengProvider:
@@ -128,22 +238,12 @@ class JimengProvider:
         account: JimengAccountConfig,
         prompt: str,
         image_paths: Iterable[str | Path],
-    ) -> Dict[str, Any]:
-        """Submit a generation job to Jimeng via CDP browser automation.
-
-        Returns a dict with ``ok`` (bool), and on success ``_session`` /
-        ``_page`` handles so the caller can later harvest the result.
-        """
+    ) -> SubmitReceipt:
+        """Submit a generation job to Jimeng via CDP browser automation."""
         resolved_images = [str(Path(item).resolve()) for item in image_paths]
-        result: Dict[str, Any] = {
-            "ok": False,
-            "account": account.name,
-            "cdp_url": self._effective_cdp_url(account),
-        }
 
         if not resolved_images:
-            result["error"] = "at least one image is required"
-            return result
+            return SubmitReceipt(ok=False, error="at least one image is required")
 
         timeout_ms = self.config.video.task_timeout_seconds * 1000
 
@@ -151,56 +251,102 @@ class JimengProvider:
         try:
             session = await self._open_session(account=account, reuse_existing_page=True)
             page = await self._ensure_work_page(session, account, "generate", timeout_ms)
-            preparation = await self._prepare_submission_page(page, account=account)
-            result.update(preparation)
-
-            upload_started = time.perf_counter()
+            await self._prepare_submission_page(page, account=account)
             await self._upload_images(page, resolved_images)
-            result["upload_seconds"] = round(max(0.0, time.perf_counter() - upload_started), 3)
-
-            prompt_fill_started = time.perf_counter()
-            prompt_fill_strategy = await self._fill_prompt(page, prompt)
-            result["prompt_fill_seconds"] = round(max(0.0, time.perf_counter() - prompt_fill_started), 3)
-            result["prompt_fill_strategy"] = prompt_fill_strategy
-
-            slot_wait_started = time.perf_counter()
-            slot_status = await self._wait_for_available_generation_slot(
+            await self._fill_prompt(page, prompt)
+            await self._wait_for_available_generation_slot(
                 page=page,
                 target_limit=self._effective_max_concurrent(account),
                 timeout_ms=timeout_ms,
             )
-            result["slot_wait_seconds"] = round(max(0.0, time.perf_counter() - slot_wait_started), 3)
-            result["slot_status"] = slot_status
-
             await self._click_generate(page)
             await page.wait_for_timeout(1500)
-
-            result.update(
-                {
-                    "ok": True,
-                    "page_url": page.url,
-                    "page_title": await page.title(),
-                    "submitted": True,
-                    "_session": session,
-                    "_page": page,
-                }
-            )
-            session = None  # caller now owns the session
-            return result
+            return SubmitReceipt(ok=True)
 
         except PlaywrightTimeoutError as exc:
             if any(token in str(exc) for token in ("Toolbar combobox index", "Toolbar controls were not ready")):
                 self._forget_sticky_generate_page(account)
-            result["error"] = f"timeout: {exc}"
-            return result
+            return SubmitReceipt(ok=False, error=f"timeout: {exc}")
         except Exception as exc:  # noqa: BLE001
             if any(token in str(exc) for token in ("Toolbar combobox index", "Toolbar controls were not ready")):
                 self._forget_sticky_generate_page(account)
-            result["error"] = str(exc)
-            return result
+            return SubmitReceipt(ok=False, error=str(exc))
         finally:
             if session is not None:
                 await self._close_session(session)
+
+    async def list_completed(
+        self,
+        account: JimengAccountConfig,
+        since_ts: float,
+    ) -> list[RemoteResult]:
+        """Poll the Jimeng generate page for videos completed after since_ts.
+
+        Connects to the existing CDP session for the account and calls
+        Jimeng's API from within the page context (auth cookies are handled
+        automatically). since_ts is a unix timestamp (float seconds).
+        """
+        timeout_ms = self.config.video.task_timeout_seconds * 1000
+        session: SessionHandle | None = None
+        try:
+            session = await self._open_session(account=account, reuse_existing_page=True)
+            page = await self._ensure_work_page(session, account, "generate", timeout_ms)
+
+            results: list[dict] = await page.evaluate(
+                _LIST_COMPLETED_JS,
+                since_ts,
+            )
+
+            items: list[RemoteResult] = []
+            for item in results:
+                url = item.get("url", "")
+                if not url:
+                    continue
+                items.append(RemoteResult(
+                    url=url,
+                    created_at=float(item.get("created_at", 0)),
+                    title=item.get("title", ""),
+                ))
+            logger.info(
+                "list_completed: account=%s since=%.0f found=%d",
+                account.name, since_ts, len(items),
+            )
+            return items
+
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("list_completed failed for account %s", account.name)
+            return []
+        finally:
+            if session is not None:
+                await self._close_session(session)
+
+    async def download_video(
+        self,
+        account: JimengAccountConfig,
+        result: RemoteResult,
+        dest_dir: str | Path,
+    ) -> DownloadReceipt:
+        """Download a completed video to dest_dir.
+
+        Uses a direct HTTP request (CDN URLs don't need auth).
+        Falls back to page.evaluate-based download if direct fails.
+        """
+        import uuid as _uuid
+        dest = Path(dest_dir)
+        dest.mkdir(parents=True, exist_ok=True)
+        filename = f"{_uuid.uuid4().hex}.mp4"
+        target = dest / filename
+
+        try:
+            await asyncio.to_thread(
+                _download_url_sync,
+                result.url,
+                str(target),
+            )
+            return DownloadReceipt(ok=True, path=str(target))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Direct download failed for %s: %s", result.url, exc)
+            return DownloadReceipt(ok=False, error=str(exc))
 
     # ── Session management ────────────────────────────────────────────────────
 

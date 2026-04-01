@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import sqlite3
 import time
@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     max_retries INTEGER NOT NULL DEFAULT 2,
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL,
+    submitted_at REAL,
+    result_url TEXT,
     duration_seconds INTEGER
 );
 
@@ -37,6 +39,12 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 """
 
+# Migration: add new columns to existing databases
+_MIGRATIONS = [
+    "ALTER TABLE tasks ADD COLUMN submitted_at REAL",
+    "ALTER TABLE tasks ADD COLUMN result_url TEXT",
+]
+
 
 class Storage:
     def __init__(self, database_path: str | Path):
@@ -47,12 +55,24 @@ class Storage:
     def connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path)
         connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA busy_timeout=5000")
         return connection
 
     def init_db(self) -> None:
         with self.connect() as connection:
             connection.executescript(SCHEMA_SQL)
             connection.commit()
+        self._run_migrations()
+
+    def _run_migrations(self) -> None:
+        for statement in _MIGRATIONS:
+            with self.connect() as connection:
+                try:
+                    connection.execute(statement)
+                    connection.commit()
+                except sqlite3.OperationalError:
+                    pass  # column already exists
 
     def create_task(self, task: Task | dict) -> Task:
         record = task if isinstance(task, Task) else Task.model_validate(task)
@@ -63,11 +83,13 @@ class Storage:
                 INSERT INTO tasks (
                     task_id, product_name, variant_id, prompt, account_name,
                     status, result_video_path, error_message, retry_count,
-                    max_retries, created_at, updated_at, duration_seconds
+                    max_retries, created_at, updated_at, submitted_at,
+                    result_url, duration_seconds
                 ) VALUES (
                     :task_id, :product_name, :variant_id, :prompt, :account_name,
                     :status, :result_video_path, :error_message, :retry_count,
-                    :max_retries, :created_at, :updated_at, :duration_seconds
+                    :max_retries, :created_at, :updated_at, :submitted_at,
+                    :result_url, :duration_seconds
                 )
                 """,
                 payload,
@@ -106,6 +128,227 @@ class Storage:
         with self.connect() as connection:
             rows = connection.execute(query, params).fetchall()
         return [Task.model_validate(dict(row)) for row in rows]
+
+    # ── Atomic state transitions ───────────────────────────────────────────────
+
+    def claim_pending_tasks(self, account_name: str, limit: int) -> list[Task]:
+        """Atomically claim up to `limit` pending tasks for an account.
+
+        Sets status to SUBMITTING and increments generating_count in a single
+        transaction. Returns the claimed tasks.
+        """
+        now = time.time()
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM tasks
+                WHERE account_name = ? AND status = ?
+                ORDER BY created_at ASC
+                LIMIT ?
+                """,
+                (account_name, TaskStatus.PENDING.value, limit),
+            ).fetchall()
+
+            claimed: list[Task] = []
+            for row in rows:
+                task_id = row["task_id"]
+                updated = connection.execute(
+                    """
+                    UPDATE tasks
+                    SET status = ?, updated_at = ?
+                    WHERE task_id = ? AND status = ?
+                    """,
+                    (TaskStatus.SUBMITTING.value, now, task_id, TaskStatus.PENDING.value),
+                ).rowcount
+                if updated:
+                    claimed.append(Task.model_validate(dict(row)))
+
+            if claimed:
+                connection.execute(
+                    """
+                    UPDATE accounts
+                    SET generating_count = MAX(generating_count + ?, 0)
+                    WHERE name = ?
+                    """,
+                    (len(claimed), account_name),
+                )
+            connection.commit()
+        return claimed
+
+    def mark_submit_succeeded(self, task_id: str, submitted_at: float) -> Task | None:
+        """Mark a task as GENERATING after successful submission."""
+        now = time.time()
+        with self.connect() as connection:
+            connection.execute(
+                """
+                UPDATE tasks
+                SET status = ?, submitted_at = ?, updated_at = ?
+                WHERE task_id = ? AND status = ?
+                """,
+                (
+                    TaskStatus.GENERATING.value,
+                    submitted_at,
+                    now,
+                    task_id,
+                    TaskStatus.SUBMITTING.value,
+                ),
+            )
+            connection.commit()
+        return self.get_task(task_id)
+
+    def mark_submit_failed(self, task_id: str, error: str) -> Task | None:
+        """Mark a task as FAILED (from SUBMITTING) and decrement generating_count."""
+        now = time.time()
+        with self.connect() as connection:
+            task_row = connection.execute(
+                "SELECT account_name FROM tasks WHERE task_id = ? AND status = ?",
+                (task_id, TaskStatus.SUBMITTING.value),
+            ).fetchone()
+
+            if task_row:
+                connection.execute(
+                    """
+                    UPDATE tasks
+                    SET status = ?, error_message = ?, retry_count = retry_count + 1,
+                        updated_at = ?
+                    WHERE task_id = ? AND status = ?
+                    """,
+                    (
+                        TaskStatus.FAILED.value,
+                        error,
+                        now,
+                        task_id,
+                        TaskStatus.SUBMITTING.value,
+                    ),
+                )
+                connection.execute(
+                    """
+                    UPDATE accounts
+                    SET generating_count = MAX(generating_count - 1, 0)
+                    WHERE name = ?
+                    """,
+                    (task_row["account_name"],),
+                )
+            connection.commit()
+        return self.get_task(task_id)
+
+    def claim_result_url(self, task_id: str, result_url: str) -> bool:
+        """Atomically claim a remote result URL for a task that is still unmatched."""
+        now = time.time()
+        with self.connect() as connection:
+            updated = connection.execute(
+                """
+                UPDATE tasks
+                SET result_url = ?, updated_at = ?
+                WHERE task_id = ? AND result_url IS NULL
+                """,
+                (result_url, now, task_id),
+            ).rowcount
+            connection.commit()
+        return updated == 1
+
+    def mark_download_succeeded(self, task_id: str, video_path: str) -> Task | None:
+        """Mark a task as SUCCEEDED with the local video path; decrement generating_count."""
+        now = time.time()
+        with self.connect() as connection:
+            task_row = connection.execute(
+                "SELECT account_name FROM tasks WHERE task_id = ?",
+                (task_id,),
+            ).fetchone()
+
+            connection.execute(
+                """
+                UPDATE tasks
+                SET status = ?, result_video_path = ?, updated_at = ?
+                WHERE task_id = ?
+                """,
+                (TaskStatus.SUCCEEDED.value, video_path, now, task_id),
+            )
+            if task_row:
+                connection.execute(
+                    """
+                    UPDATE accounts
+                    SET generating_count = MAX(generating_count - 1, 0)
+                    WHERE name = ?
+                    """,
+                    (task_row["account_name"],),
+                )
+            connection.commit()
+        return self.get_task(task_id)
+
+    def mark_download_failed(self, task_id: str, error: str) -> Task | None:
+        """Mark a task as FAILED from DOWNLOADING; decrement generating_count."""
+        now = time.time()
+        with self.connect() as connection:
+            task_row = connection.execute(
+                "SELECT account_name FROM tasks WHERE task_id = ?",
+                (task_id,),
+            ).fetchone()
+
+            connection.execute(
+                """
+                UPDATE tasks
+                SET status = ?, error_message = ?, retry_count = retry_count + 1,
+                    updated_at = ?
+                WHERE task_id = ?
+                """,
+                (TaskStatus.FAILED.value, error, now, task_id),
+            )
+            if task_row:
+                connection.execute(
+                    """
+                    UPDATE accounts
+                    SET generating_count = MAX(generating_count - 1, 0)
+                    WHERE name = ?
+                    """,
+                    (task_row["account_name"],),
+                )
+            connection.commit()
+        return self.get_task(task_id)
+
+    def rescue_stale_downloads(self) -> None:
+        """Reset stale DOWNLOADING tasks to GENERATING before startup recount."""
+        now = time.time()
+        with self.connect() as connection:
+            connection.execute(
+                """
+                UPDATE tasks
+                SET status = ?, updated_at = ?
+                WHERE status = ?
+                """,
+                (
+                    TaskStatus.GENERATING.value,
+                    now,
+                    TaskStatus.DOWNLOADING.value,
+                ),
+            )
+            connection.commit()
+
+    def rebuild_generating_counts(self) -> None:
+        """Recount generating tasks per account from task table.
+
+        Call on startup to repair generating_count after unclean shutdown.
+        """
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT account_name, COUNT(*) as cnt
+                FROM tasks
+                WHERE status IN (?, ?)
+                GROUP BY account_name
+                """,
+                (TaskStatus.SUBMITTING.value, TaskStatus.GENERATING.value),
+            ).fetchall()
+
+            connection.execute("UPDATE accounts SET generating_count = 0")
+            for row in rows:
+                connection.execute(
+                    "UPDATE accounts SET generating_count = ? WHERE name = ?",
+                    (row["cnt"], row["account_name"]),
+                )
+            connection.commit()
+
+    # ── Legacy update methods (kept for compatibility) ────────────────────────
 
     def update_task_status(
         self,
@@ -158,7 +401,6 @@ class Storage:
                         cdp_url = excluded.cdp_url,
                         web_port = excluded.web_port,
                         status = excluded.status,
-                        generating_count = excluded.generating_count,
                         max_concurrent = excluded.max_concurrent
                     """,
                     (

@@ -1,11 +1,12 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import logging
+import time
+from pathlib import Path
 
 from src.config import AppConfig
 from src.models.account import AccountStatus
-from src.models.task import Task, TaskStatus
 from src.providers.jimeng import JimengProvider
 from src.runtime.storage import Storage
 
@@ -18,73 +19,78 @@ class Scheduler:
         self.provider = provider
         self.config = config
 
+    def _resolve_image_paths(self, product_name: str) -> list[str]:
+        """Return absolute paths for all images under data_dir/{product_name}/."""
+        data_dir = Path(self.config.paths.data_dir)
+        product_dir = data_dir / product_name
+        if not product_dir.exists():
+            return []
+        extensions = {".jpg", ".jpeg", ".png", ".webp"}
+        return sorted(
+            str(p.resolve())
+            for p in product_dir.iterdir()
+            if p.suffix.lower() in extensions
+        )
+
     async def run_once(self) -> list[str]:
         accounts = self.storage.get_accounts(status=AccountStatus.ACTIVE)
-        slot_map = {
-            account.name: max(0, account.max_concurrent - account.generating_count)
-            for account in accounts
-        }
-        pending = self.storage.list_tasks(status=TaskStatus.PENDING)
-
-        tasks_by_account: dict[str, list[Task]] = {}
-        for task in pending:
-            tasks_by_account.setdefault(task.account_name, []).append(task)
-
         submitted: list[str] = []
 
-        for account_name, slots in slot_map.items():
+        for account in accounts:
+            slots = max(0, account.max_concurrent - account.generating_count)
             if slots <= 0:
                 continue
 
-            acct_tasks = tasks_by_account.get(account_name, [])
-            for task in acct_tasks[:slots]:
-                self.storage.update_task_status(task.task_id, TaskStatus.SUBMITTING)
-                self.storage.update_generating_count(account_name, delta=+1)
+            for _ in range(slots):
+                # Claim one task at a time — if cancelled mid-loop, only the
+                # current task needs rollback, not a pre-claimed batch.
+                tasks = self.storage.claim_pending_tasks(account.name, limit=1)
+                if not tasks:
+                    break
+                task = tasks[0]
 
                 try:
-                    acct_cfg = self.provider.get_account(account_name)
+                    acct_cfg = self.provider.get_account(account.name)
                 except ValueError as exc:
-                    self.storage.update_task_status(
-                        task.task_id,
-                        TaskStatus.FAILED,
-                        error_message=str(exc),
-                        increment_retry=True,
-                    )
-                    self.storage.update_generating_count(account_name, delta=-1)
-                    logger.warning("Scheduler account lookup failed for %s: %s", account_name, exc)
+                    self.storage.mark_submit_failed(task.task_id, str(exc))
+                    logger.warning("Account lookup failed for %s: %s", account.name, exc)
                     continue
 
+                image_paths = self._resolve_image_paths(task.product_name)
+                if not image_paths:
+                    self.storage.mark_submit_failed(
+                        task.task_id,
+                        f"No images found for product '{task.product_name}'",
+                    )
+                    logger.warning(
+                        "No images for product '%s', task %s failed",
+                        task.product_name, task.task_id,
+                    )
+                    continue
+
+                submit_start = time.time()
                 try:
-                    result = await self.provider.submit_job(
+                    receipt = await self.provider.submit_job(
                         account=acct_cfg,
                         prompt=task.prompt,
-                        image_paths=[],  # TODO: Phase 4 — wire in data_dir/product_name images
+                        image_paths=image_paths,
                     )
                 except asyncio.CancelledError:
-                    self.storage.update_generating_count(account_name, delta=-1)
+                    self.storage.mark_submit_failed(task.task_id, "cancelled")
                     raise
                 except Exception as exc:  # noqa: BLE001
-                    logger.exception("Scheduler submit failed for task %s", task.task_id)
-                    self.storage.update_task_status(
-                        task.task_id,
-                        TaskStatus.FAILED,
-                        error_message=str(exc),
-                        increment_retry=True,
-                    )
-                    self.storage.update_generating_count(account_name, delta=-1)
+                    logger.exception("Submit failed for task %s", task.task_id)
+                    self.storage.mark_submit_failed(task.task_id, str(exc))
                     continue
 
-                if result.get("ok"):
-                    self.storage.update_task_status(task.task_id, TaskStatus.GENERATING)
+                if receipt.ok:
+                    self.storage.mark_submit_succeeded(task.task_id, submitted_at=submit_start)
+                    submitted.append(task.task_id)
+                    logger.info("Submitted task %s for account %s", task.task_id, account.name)
                 else:
-                    self.storage.update_task_status(
-                        task.task_id,
-                        TaskStatus.FAILED,
-                        error_message=result.get("error"),
-                        increment_retry=True,
+                    self.storage.mark_submit_failed(task.task_id, receipt.error or "unknown error")
+                    logger.warning(
+                        "Submit rejected for task %s: %s", task.task_id, receipt.error,
                     )
-                    self.storage.update_generating_count(account_name, delta=-1)
-
-                submitted.append(task.task_id)
 
         return submitted
