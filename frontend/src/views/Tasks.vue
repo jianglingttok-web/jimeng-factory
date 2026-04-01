@@ -23,6 +23,7 @@
         </option>
       </select>
       <button class="btn-primary" @click="load">刷新</button>
+      <button @click="syncAccounts" style="background:#52c41a;color:#fff">同步账号</button>
     </div>
 
     <!-- 任务表格 -->
@@ -74,7 +75,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { fetchTasks, fetchAccounts, fetchStatus, stopTask } from '../api.js'
+import { fetchTasks, fetchAccounts, fetchStatus, stopTask, discoverAccounts } from '../api.js'
 
 const tasks = ref([])
 const accounts = ref([])
@@ -98,6 +99,11 @@ async function load() {
 
 async function stop(id) {
   await stopTask(id)
+  await load()
+}
+
+async function syncAccounts() {
+  await discoverAccounts()
   await load()
 }
 

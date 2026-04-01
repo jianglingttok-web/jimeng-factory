@@ -41,3 +41,11 @@ export function submitTasks(body) {
 export function stopTask(taskId) {
   return request(`/api/tasks/${taskId}/stop`, { method: 'POST' })
 }
+
+export function discoverAccounts() {
+  return request('/api/accounts/discover', { method: 'POST' })
+}
+
+export function deleteProduct(name) {
+  return request(`/api/products/${encodeURIComponent(name)}`, { method: 'DELETE' })
+}

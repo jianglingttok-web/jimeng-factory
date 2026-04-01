@@ -60,28 +60,20 @@ async def lifespan(app: FastAPI):
 
     provider = JimengProvider(config, config_path)
 
-    # Sync accounts from config into DB
-    from src.models.account import Account, AccountStatus
-    accounts = [
-        Account(
-            name=acct.name,
-            space_id=acct.space_id,
-            cdp_url=acct.cdp_url or config.providers.jimeng.cdp_url,
-            web_port=acct.web_port or config.providers.jimeng.web_port,
-            status=AccountStatus.ACTIVE,
-            max_concurrent=acct.max_concurrent or config.providers.jimeng.default_concurrency,
-        )
-        for acct in config.providers.jimeng.accounts
-    ]
-    if accounts:
-        storage.sync_accounts(accounts)
-
     scheduler = Scheduler(storage, provider, config)
     harvester = Harvester(storage, provider, config)
 
     app.state.config = config
     app.state.storage = storage
     app.state.provider = provider
+
+    # Auto-discover accounts from multi-space browser on startup
+    from src.web.routes import _do_discover
+    try:
+        discovered = await _do_discover(app.state)
+        logger.info("Auto-discovered %d account(s) from multi-space browser", len(discovered))
+    except Exception as exc:
+        logger.warning("Account auto-discovery failed (will retry via /api/accounts/discover): %s", exc)
 
     tasks = [
         asyncio.create_task(_scheduler_loop(scheduler), name="scheduler"),

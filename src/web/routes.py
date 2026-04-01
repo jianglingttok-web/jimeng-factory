@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import shutil
+from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from src.models.task import Task, TaskStatus
@@ -16,7 +18,17 @@ class SubmitRequest(BaseModel):
     product_name: str
     account_name: str
     count: int
-    variant_ids: list[str] | None = None  # None = round-robin all variants
+    variant_ids: list[str] | None = None
+
+
+class VariantInput(BaseModel):
+    title: str
+    prompt: str
+
+
+class CreateProductRequest(BaseModel):
+    name: str
+    variants: list[VariantInput]
 
 
 # ── Products ──────────────────────────────────────────────────────────────────
@@ -34,6 +46,69 @@ async def get_product(name: str, request: Request) -> dict[str, Any]:
         return _get(request.app.state.config.paths.data_dir, name)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Product '{name}' not found")
+
+
+@router.post("/products")
+async def create_product(body: CreateProductRequest, request: Request) -> dict[str, Any]:
+    from src.runtime.product_store import create_product as _create
+    from src.models.product import PromptVariant
+    data_dir = request.app.state.config.paths.data_dir
+    variants = [PromptVariant(id="", title=v.title, prompt=v.prompt) for v in body.variants]
+    try:
+        return _create(data_dir, body.name, variants, images=[])
+    except FileExistsError:
+        raise HTTPException(status_code=409, detail=f"Product '{body.name}' already exists")
+
+
+@router.post("/products/{name}/images")
+async def upload_product_images(
+    name: str,
+    request: Request,
+    files: list[UploadFile] = File(...),
+) -> dict[str, Any]:
+    """Upload images to a product directory."""
+    from src.runtime.product_store import get_product as _get, _write_product_file
+    from src.models.product import Product
+    import json
+
+    data_dir = Path(request.app.state.config.paths.data_dir)
+    product_dir = data_dir / name
+    if not product_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Product '{name}' not found")
+
+    saved: list[str] = []
+    allowed = {".jpg", ".jpeg", ".png", ".webp"}
+    for f in files:
+        suffix = Path(f.filename or "").suffix.lower()
+        if suffix not in allowed:
+            continue
+        dest = product_dir / f.filename
+        with dest.open("wb") as out:
+            shutil.copyfileobj(f.file, out)
+        saved.append(f.filename)
+
+    if saved:
+        # Update product.json images list
+        product_file = product_dir / "product.json"
+        data = json.loads(product_file.read_text(encoding="utf-8"))
+        existing = set(data.get("images", []))
+        existing.update(saved)
+        data["images"] = sorted(existing)
+        product_file.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+    return {"saved": saved}
+
+
+@router.delete("/products/{name}")
+async def delete_product(name: str, request: Request) -> dict[str, Any]:
+    data_dir = Path(request.app.state.config.paths.data_dir)
+    product_dir = data_dir / name
+    if not product_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Product '{name}' not found")
+    shutil.rmtree(product_dir)
+    return {"deleted": name}
 
 
 # ── Tasks ─────────────────────────────────────────────────────────────────────
@@ -57,7 +132,6 @@ async def list_tasks(
 
 @router.post("/tasks/submit")
 async def submit_tasks(body: SubmitRequest, request: Request) -> dict[str, Any]:
-    """Create pending tasks for a product + account combination."""
     from src.models.task import Task
     from src.runtime.product_store import get_product as _get
 
@@ -73,7 +147,6 @@ async def submit_tasks(body: SubmitRequest, request: Request) -> dict[str, Any]:
     if not variants:
         raise HTTPException(status_code=422, detail="Product has no prompt variants")
 
-    # Filter to requested variant IDs if specified
     if body.variant_ids:
         variants = [v for v in variants if v["id"] in body.variant_ids]
         if not variants:
@@ -106,9 +179,7 @@ async def stop_task(task_id: str, request: Request) -> dict[str, Any]:
         updated = storage.mark_submit_failed(task_id, "stopped by user")
     else:
         updated = storage.update_task_status(
-            task_id,
-            TaskStatus.FAILED,
-            error_message="stopped by user",
+            task_id, TaskStatus.FAILED, error_message="stopped by user"
         )
     return updated.model_dump(mode="json") if updated else {}
 
@@ -121,9 +192,15 @@ async def list_accounts(request: Request) -> list[dict[str, Any]]:
     return [a.model_dump(mode="json") for a in accounts]
 
 
+@router.post("/accounts/discover")
+async def discover_accounts(request: Request) -> dict[str, Any]:
+    """Pull account list from multi-space browser API and sync to DB."""
+    synced = await _do_discover(request.app.state)
+    return {"synced": len(synced), "accounts": [a.model_dump(mode="json") for a in synced]}
+
+
 @router.post("/accounts/{name}/probe")
 async def probe_account(name: str, request: Request) -> dict[str, Any]:
-    """Basic health check: verify CDP is reachable for the account."""
     provider = request.app.state.provider
     try:
         acct_cfg = provider.get_account(name)
@@ -159,3 +236,62 @@ async def system_status(request: Request) -> dict[str, Any]:
             for a in accounts
         ],
     }
+
+
+# ── Account discovery helper (shared with lifespan) ──────────────────────────
+
+async def _do_discover(state: Any) -> list:
+    """Fetch spaces from multi-space browser API and sync as accounts."""
+    import asyncio
+    from urllib import request as urllib_request
+    import json as _json
+    from src.models.account import Account, AccountStatus
+
+    config = state.config
+    storage = state.storage
+    web_port = config.providers.jimeng.web_port
+    cdp_url = config.providers.jimeng.cdp_url
+    max_concurrent = config.providers.jimeng.default_concurrency
+
+    url = f"http://127.0.0.1:{web_port}/api/sandbox/spaces"
+    try:
+        raw = await asyncio.to_thread(
+            lambda: urllib_request.urlopen(  # noqa: S310
+                urllib_request.Request(url, headers={"User-Agent": "jimeng-factory"}),
+                timeout=5,
+            ).read().decode("utf-8")
+        )
+        spaces = _json.loads(raw)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Cannot reach multi-space browser: {exc}")
+
+    if not isinstance(spaces, list):
+        raise HTTPException(status_code=502, detail="Unexpected response from multi-space browser")
+
+    accounts = [
+        Account(
+            name=space.get("name") or space["id"],
+            space_id=space["id"],
+            cdp_url=cdp_url,
+            web_port=web_port,
+            status=AccountStatus.ACTIVE,
+            max_concurrent=max_concurrent,
+        )
+        for space in spaces
+        if space.get("id")
+    ]
+    if accounts:
+        storage.sync_accounts(accounts)
+        # Keep provider config in sync so get_account() works
+        from src.config import JimengAccountConfig
+        state.provider.provider_config.accounts = [
+            JimengAccountConfig(
+                name=a.name,
+                space_id=a.space_id,
+                cdp_url=a.cdp_url,
+                web_port=a.web_port,
+                max_concurrent=a.max_concurrent,
+            )
+            for a in accounts
+        ]
+    return accounts
