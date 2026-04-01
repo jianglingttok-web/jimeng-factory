@@ -270,7 +270,7 @@ class JimengProvider:
         except Exception as exc:  # noqa: BLE001
             if any(token in str(exc) for token in ("Toolbar combobox index", "Toolbar controls were not ready")):
                 self._forget_sticky_generate_page(account)
-            return SubmitReceipt(ok=False, error=str(exc))
+            return SubmitReceipt(ok=False, error=f"{type(exc).__name__}: {exc}" or repr(exc))
         finally:
             if session is not None:
                 await self._close_session(session)
@@ -346,7 +346,7 @@ class JimengProvider:
             return DownloadReceipt(ok=True, path=str(target))
         except Exception as exc:  # noqa: BLE001
             logger.error("Direct download failed for %s: %s", result.url, exc)
-            return DownloadReceipt(ok=False, error=str(exc))
+            return DownloadReceipt(ok=False, error=f"{type(exc).__name__}: {exc}" or repr(exc))
 
     # ── Session management ────────────────────────────────────────────────────
 

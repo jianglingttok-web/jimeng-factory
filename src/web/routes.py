@@ -170,6 +170,14 @@ async def submit_tasks(body: SubmitRequest, request: Request) -> dict[str, Any]:
     return {"created": len(created), "task_ids": created}
 
 
+@router.post("/tasks/retry-failed")
+async def retry_failed_tasks(request: Request) -> dict[str, Any]:
+    """Reset all FAILED tasks back to PENDING so the scheduler can retry them."""
+    storage = request.app.state.storage
+    count = storage.reset_failed_tasks()
+    return {"reset": count}
+
+
 @router.post("/tasks/{task_id}/stop")
 async def stop_task(task_id: str, request: Request) -> dict[str, Any]:
     storage = request.app.state.storage

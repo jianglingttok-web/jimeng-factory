@@ -52,7 +52,7 @@ class Scheduler:
                 try:
                     acct_cfg = self.provider.get_account(account.name)
                 except ValueError as exc:
-                    self.storage.mark_submit_failed(task.task_id, str(exc))
+                    self.storage.mark_submit_failed(task.task_id, f"{type(exc).__name__}: {exc}" or repr(exc))
                     logger.warning("Account lookup failed for %s: %s", account.name, exc)
                     continue
 
@@ -80,7 +80,7 @@ class Scheduler:
                     raise
                 except Exception as exc:  # noqa: BLE001
                     logger.exception("Submit failed for task %s", task.task_id)
-                    self.storage.mark_submit_failed(task.task_id, str(exc))
+                    self.storage.mark_submit_failed(task.task_id, f"{type(exc).__name__}: {exc}" or repr(exc))
                     continue
 
                 if receipt.ok:

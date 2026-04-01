@@ -232,6 +232,21 @@ class Storage:
             connection.commit()
         return self.get_task(task_id)
 
+    def reset_failed_tasks(self) -> int:
+        """Reset all FAILED tasks back to PENDING. Returns count of tasks reset."""
+        now = time.time()
+        with self.connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE tasks
+                SET status = ?, error_message = NULL, updated_at = ?
+                WHERE status = ?
+                """,
+                (TaskStatus.PENDING.value, now, TaskStatus.FAILED.value),
+            )
+            connection.commit()
+        return cursor.rowcount
+
     def claim_result_url(self, task_id: str, result_url: str) -> bool:
         """Atomically claim a remote result URL for a task that is still unmatched."""
         now = time.time()

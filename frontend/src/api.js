@@ -42,6 +42,10 @@ export function stopTask(taskId) {
   return request(`/api/tasks/${taskId}/stop`, { method: 'POST' })
 }
 
+export function retryFailedTasks() {
+  return request('/api/tasks/retry-failed', { method: 'POST' })
+}
+
 export function discoverAccounts() {
   return request('/api/accounts/discover', { method: 'POST' })
 }

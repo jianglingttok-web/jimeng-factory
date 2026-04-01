@@ -23,6 +23,7 @@
         </option>
       </select>
       <button class="btn-primary" @click="load">刷新</button>
+      <button @click="retryFailed" style="background:#fa8c16;color:#fff">重试失败</button>
       <button @click="syncAccounts" style="background:#52c41a;color:#fff">同步账号</button>
     </div>
 
@@ -75,7 +76,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { fetchTasks, fetchAccounts, fetchStatus, stopTask, discoverAccounts } from '../api.js'
+import { fetchTasks, fetchAccounts, fetchStatus, stopTask, discoverAccounts, retryFailedTasks } from '../api.js'
 
 const tasks = ref([])
 const accounts = ref([])
@@ -99,6 +100,11 @@ async function load() {
 
 async function stop(id) {
   await stopTask(id)
+  await load()
+}
+
+async function retryFailed() {
+  await retryFailedTasks()
   await load()
 }
 
