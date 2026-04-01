@@ -22,8 +22,8 @@ class SubmitRequest(BaseModel):
 
 
 class VariantInput(BaseModel):
-    title: str
     prompt: str
+    title: str = ""  # auto-generated from prompt if empty
 
 
 class CreateProductRequest(BaseModel):
@@ -53,7 +53,10 @@ async def create_product(body: CreateProductRequest, request: Request) -> dict[s
     from src.runtime.product_store import create_product as _create
     from src.models.product import PromptVariant
     data_dir = request.app.state.config.paths.data_dir
-    variants = [PromptVariant(id="", title=v.title, prompt=v.prompt) for v in body.variants]
+    variants = [
+        PromptVariant(id="", title=v.title or v.prompt[:20], prompt=v.prompt)
+        for v in body.variants
+    ]
     try:
         return _create(data_dir, body.name, variants, images=[])
     except FileExistsError:
