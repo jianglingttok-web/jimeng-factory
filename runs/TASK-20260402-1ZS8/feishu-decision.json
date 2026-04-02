@@ -1,0 +1,8 @@
+{
+  "taskId": "TASK-20260402-1ZS8",
+  "decision": "retry",
+  "source": "auto-timeout",
+  "operator": "auto",
+  "instruction": "",
+  "timestamp": "2026-04-02T17:06:14.068Z"
+}
