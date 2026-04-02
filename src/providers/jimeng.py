@@ -660,8 +660,10 @@ class JimengProvider:
         return candidates
 
     def _pick_existing_jimeng_page(self, browser: Browser) -> Optional[Page]:
-        candidates = self._candidate_pages(browser)
-        return candidates[0] if candidates else None
+        for page in self._candidate_pages(browser):
+            if not page.is_closed() and JIMENG_HOST_FRAGMENT in page.url:
+                return page
+        return None
 
     async def _page_identity(self, page: Page) -> Optional[Dict[str, Optional[str]]]:
         if page.is_closed() or JIMENG_HOST_FRAGMENT not in page.url:
