@@ -45,6 +45,7 @@ _MIGRATIONS = [
     "ALTER TABLE tasks ADD COLUMN max_retries INTEGER NOT NULL DEFAULT 2",
     "ALTER TABLE tasks ADD COLUMN submitted_at REAL",
     "ALTER TABLE tasks ADD COLUMN result_url TEXT",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_space_id ON accounts(space_id)",
 ]
 
 
@@ -73,8 +74,8 @@ class Storage:
                 try:
                     connection.execute(statement)
                     connection.commit()
-                except sqlite3.OperationalError:
-                    pass  # column already exists
+                except sqlite3.Error:
+                    pass  # column/index already exists or existing duplicate data blocks the index
 
     def create_task(self, task: Task | dict) -> Task:
         record = task if isinstance(task, Task) else Task.model_validate(task)
@@ -512,30 +513,123 @@ class Storage:
             for account in accounts
         ]
         with self.connect() as connection:
-            for account in normalized:
+            duplicate_space_rows = connection.execute(
+                """
+                SELECT space_id
+                FROM accounts
+                WHERE space_id != ''
+                GROUP BY space_id
+                HAVING COUNT(*) > 1
+                """
+            ).fetchall()
+            for row in duplicate_space_rows:
+                space_id = row["space_id"]
+                existing_rows = connection.execute(
+                    """
+                    SELECT name, generating_count
+                    FROM accounts
+                    WHERE space_id = ?
+                    ORDER BY rowid ASC
+                    """,
+                    (space_id,),
+                ).fetchall()
+                if not existing_rows:
+                    continue
+
+                canonical_name = existing_rows[0]["name"]
+                old_names = [existing_row["name"] for existing_row in existing_rows]
+                preserved_generating = max(
+                    int(existing_row["generating_count"] or 0)
+                    for existing_row in existing_rows
+                )
+                placeholders = ",".join("?" for _ in old_names)
+                connection.execute(
+                    f"UPDATE tasks SET account_name = ? WHERE account_name IN ({placeholders})",
+                    [canonical_name, *old_names],
+                )
+                connection.execute("DELETE FROM accounts WHERE space_id = ?", (space_id,))
                 connection.execute(
                     """
                     INSERT INTO accounts (
                         name, space_id, cdp_url, web_port, status,
                         generating_count, max_concurrent
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(name) DO UPDATE SET
-                        space_id = excluded.space_id,
-                        cdp_url = excluded.cdp_url,
-                        web_port = excluded.web_port,
-                        status = excluded.status,
-                        max_concurrent = excluded.max_concurrent
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        account.name,
-                        account.space_id,
-                        account.cdp_url,
-                        account.web_port,
-                        account.status.value,
-                        account.generating_count,
-                        account.max_concurrent,
+                        canonical_name,
+                        space_id,
+                        "",
+                        0,
+                        AccountStatus.ACTIVE.value,
+                        preserved_generating,
+                        10,
                     ),
                 )
+
+            for account in normalized:
+                status_value = getattr(account.status, "value", account.status)
+                existing_rows = connection.execute(
+                    """
+                    SELECT name, generating_count
+                    FROM accounts
+                    WHERE space_id = ?
+                    ORDER BY rowid ASC
+                    """,
+                    (account.space_id,),
+                ).fetchall()
+
+                if existing_rows:
+                    old_names = [row["name"] for row in existing_rows]
+                    preserved_generating = max(
+                        int(row["generating_count"] or 0)
+                        for row in existing_rows
+                    )
+                    placeholders = ",".join("?" for _ in old_names)
+                    connection.execute(
+                        f"UPDATE tasks SET account_name = ? WHERE account_name IN ({placeholders})",
+                        [account.name, *old_names],
+                    )
+                    connection.execute("DELETE FROM accounts WHERE space_id = ?", (account.space_id,))
+                    connection.execute(
+                        """
+                        INSERT INTO accounts (
+                            name, space_id, cdp_url, web_port, status,
+                            generating_count, max_concurrent
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            account.name,
+                            account.space_id,
+                            account.cdp_url,
+                            account.web_port,
+                            status_value,
+                            preserved_generating,
+                            account.max_concurrent,
+                        ),
+                    )
+                else:
+                    connection.execute(
+                        """
+                        INSERT INTO accounts (
+                            name, space_id, cdp_url, web_port, status,
+                            generating_count, max_concurrent
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            account.name,
+                            account.space_id,
+                            account.cdp_url,
+                            account.web_port,
+                            status_value,
+                            account.generating_count,
+                            account.max_concurrent,
+                        ),
+                    )
+
+            connection.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_space_id ON accounts(space_id)"
+            )
             connection.commit()
         return normalized
 

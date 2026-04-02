@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -292,6 +293,15 @@ async def _do_discover(state: Any) -> list:
     web_port = config.providers.jimeng.web_port
     cdp_url = config.providers.jimeng.cdp_url
     max_concurrent = config.providers.jimeng.default_concurrency
+
+    for var in ("no_proxy", "NO_PROXY"):
+        existing = os.environ.get(var, "")
+        if "127.0.0.1" not in existing:
+            os.environ[var] = (
+                f"127.0.0.1,localhost,{existing}"
+                if existing
+                else "127.0.0.1,localhost"
+            )
 
     url = f"http://127.0.0.1:{web_port}/api/sandbox/spaces"
     try:
