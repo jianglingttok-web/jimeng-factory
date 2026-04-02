@@ -1,6 +1,6 @@
 @echo off
-chcp 65001 > nul
 setlocal
+chcp 65001 > nul
 
 set "ROOT=%~dp0"
 set "FRONTEND=%ROOT%frontend"
