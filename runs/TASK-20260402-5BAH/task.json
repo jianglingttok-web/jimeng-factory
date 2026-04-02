@@ -1,0 +1,12 @@
+{
+  "id": "TASK-20260402-5BAH",
+  "name": "测试链路",
+  "description": "测试链路",
+  "rawRequest": "测试链路",
+  "status": "blocked",
+  "createdAt": "2026-04-02T17:01:26.118Z",
+  "updatedAt": "2026-04-02T17:01:26.134Z",
+  "priority": "medium",
+  "requester": "tred",
+  "currentAttemptId": "ATTEMPT-20260402-8VAC"
+}
