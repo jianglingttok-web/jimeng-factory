@@ -18,8 +18,23 @@ export function fetchAccounts() {
   return request('/api/accounts')
 }
 
-export function fetchProducts() {
+export function listProducts() {
   return request('/api/products')
+}
+
+export function fetchProducts() {
+  return listProducts()
+}
+
+export function getProduct(name) {
+  return request(`/api/products/${encodeURIComponent(name)}`)
+}
+
+export function createProduct(data) {
+  return request('/api/products', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
 }
 
 export function updateProduct(name, variants) {
@@ -60,4 +75,12 @@ export function discoverAccounts() {
 
 export function deleteProduct(name) {
   return request(`/api/products/${encodeURIComponent(name)}`, { method: 'DELETE' })
+}
+
+export function uploadProductImages(name, formData) {
+  return request(`/api/products/${encodeURIComponent(name)}/images`, {
+    method: 'POST',
+    headers: {},
+    body: formData,
+  })
 }

@@ -123,7 +123,13 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { fetchProducts, updateProduct } from '../api.js'
+import {
+  createProduct as createProductApi,
+  deleteProduct as deleteProductApi,
+  listProducts,
+  updateProduct,
+  uploadProductImages,
+} from '../api.js'
 
 const products = ref([])
 const showForm = ref(false)
@@ -140,7 +146,7 @@ const savingEdit = ref(false)
 const newProduct = ref({ name: '', variants: [{ prompt: '' }] })
 
 async function load() {
-  products.value = await fetchProducts()
+  products.value = await listProducts()
 }
 
 function startEditing(product) {
@@ -201,23 +207,16 @@ async function createProduct() {
   creating.value = true
   try {
     // 1. 创建产品
-    const r = await fetch('/api/products', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newProduct.value.name, variants: validVariants }),
+    await createProductApi({
+      name: newProduct.value.name,
+      variants: validVariants,
     })
-    if (!r.ok) {
-      const e = await r.json()
-      throw new Error(e.detail || r.statusText)
-    }
 
     // 2. 上传图片（如果有）
     if (selectedFiles.value.length) {
       const fd = new FormData()
       for (const f of selectedFiles.value) fd.append('files', f)
-      await fetch(`/api/products/${encodeURIComponent(newProduct.value.name)}/images`, {
-        method: 'POST', body: fd,
-      })
+      await uploadProductImages(newProduct.value.name, fd)
     }
 
     cancelForm()
@@ -231,7 +230,7 @@ async function createProduct() {
 
 async function doDelete(name) {
   if (!confirm(`确认删除产品「${name}」？`)) return
-  await fetch(`/api/products/${encodeURIComponent(name)}`, { method: 'DELETE' })
+  await deleteProductApi(name)
   if (editingProduct.value === name) {
     cancelEditing()
   }

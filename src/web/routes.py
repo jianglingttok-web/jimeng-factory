@@ -273,6 +273,11 @@ async def system_status(request: Request) -> dict[str, Any]:
     }
 
 
+@router.get("/health")
+async def health_check() -> dict[str, str]:
+    return {"status": "ok"}
+
+
 # ── Account discovery helper (shared with lifespan) ──────────────────────────
 
 async def _do_discover(state: Any) -> list:
