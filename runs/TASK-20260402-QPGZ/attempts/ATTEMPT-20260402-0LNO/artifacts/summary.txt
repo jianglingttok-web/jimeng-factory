@@ -1,0 +1,3 @@
+Task: TASK-20260402-QPGZ
+Attempt: ATTEMPT-20260402-0LNO
+This is a mock artifact produced by the V1 runner.
