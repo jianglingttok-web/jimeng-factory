@@ -1,0 +1,12 @@
+{
+  "id": "TASK-20260402-TTFL",
+  "name": "测试：验证即梦内容工厂飞书群通知链路",
+  "description": "测试：验证即梦内容工厂飞书群通知链路",
+  "rawRequest": "测试：验证即梦内容工厂飞书群通知链路",
+  "status": "blocked",
+  "createdAt": "2026-04-02T16:58:41.023Z",
+  "updatedAt": "2026-04-02T16:58:41.037Z",
+  "priority": "medium",
+  "requester": "tred",
+  "currentAttemptId": "ATTEMPT-20260402-HNZN"
+}
