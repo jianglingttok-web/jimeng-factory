@@ -1,0 +1,4 @@
+{"taskId":"TASK-20260402-QPGZ","type":"task-created","payload":{"requester":"tred","priority":"medium"},"id":"EVT-LJ1K58","timestamp":"2026-04-02T17:00:50.156Z"}
+{"taskId":"TASK-20260402-QPGZ","type":"spec-generated","payload":{"acceptanceCriteriaCount":1,"referencesCount":0},"id":"EVT-8XUMVO","timestamp":"2026-04-02T17:00:50.156Z"}
+{"taskId":"TASK-20260402-QPGZ","attemptId":"ATTEMPT-20260402-QA99","type":"attempt-started","payload":{"attemptNumber":1,"workspacePath":"E:/即梦内容工厂"},"id":"EVT-OKC0HM","timestamp":"2026-04-02T17:00:50.161Z"}
+{"taskId":"TASK-20260402-QPGZ","attemptId":"ATTEMPT-20260402-QA99","type":"escalated","payload":{"issues":["Semantic verification was inconclusive because required context is missing.","Missing context: semantic evaluator not provided."]},"id":"EVT-DQE2K2","timestamp":"2026-04-02T17:00:50.164Z"}

@@ -1,0 +1,12 @@
+{
+  "id": "TASK-20260402-QPGZ",
+  "name": "测试链路",
+  "description": "测试链路",
+  "rawRequest": "测试链路",
+  "status": "blocked",
+  "createdAt": "2026-04-02T17:00:50.153Z",
+  "updatedAt": "2026-04-02T17:00:50.163Z",
+  "priority": "medium",
+  "requester": "tred",
+  "currentAttemptId": "ATTEMPT-20260402-QA99"
+}
