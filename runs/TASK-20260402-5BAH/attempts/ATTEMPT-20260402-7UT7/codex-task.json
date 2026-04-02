@@ -1,0 +1,19 @@
+{
+  "taskId": "TASK-20260402-5BAH",
+  "attemptId": "ATTEMPT-20260402-7UT7",
+  "plan": {
+    "taskId": "TASK-20260402-5BAH",
+    "steps": [
+      "Implement the requested change according to the provided references."
+    ],
+    "files": []
+  },
+  "acceptanceCriteria": [
+    {
+      "id": "ac-1",
+      "description": "Implementation satisfies the original request without unrelated changes.",
+      "required": true
+    }
+  ],
+  "references": []
+}
