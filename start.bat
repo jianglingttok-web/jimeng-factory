@@ -1,8 +1,9 @@
 @echo off
+chcp 65001 > nul
 setlocal
 
-set "ROOT=E:\即梦内容工厂"
-set "FRONTEND=%ROOT%\frontend"
+set "ROOT=%~dp0"
+set "FRONTEND=%ROOT%frontend"
 set "BROWSER_EXE=E:\多空间浏览器\mul-key-chrome\多空间浏览器.exe"
 set "CDP_PORT=9222"
 set "API_PORT=8001"
@@ -18,10 +19,10 @@ if errorlevel 1 (
 )
 
 echo Starting FastAPI on port %API_PORT%...
-start "FastAPI" cmd /k "cd /d %ROOT% && python -m uvicorn src.web.app:app --host 0.0.0.0 --port %API_PORT%"
+start "FastAPI" cmd /k "cd /d ""%ROOT%"" && python -m uvicorn src.web.app:app --host 0.0.0.0 --port %API_PORT%"
 
 echo Starting Vite dev server...
-start "Frontend" cmd /k "cd /d %FRONTEND% && npm run dev"
+start "Frontend" cmd /k "cd /d ""%FRONTEND%"" && npm run dev"
 
 echo Opening frontend...
 timeout /t 2 /nobreak > nul
