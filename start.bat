@@ -10,7 +10,7 @@ set "API_PORT=8001"
 set "FRONTEND_URL=http://localhost:5173"
 
 echo Checking multi-space browser on port %CDP_PORT%...
-powershell -NoProfile -Command "if (Get-NetTCPConnection -LocalPort %CDP_PORT% -State Listen -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }"
+netstat -ano | findstr ":%CDP_PORT% " | findstr /C:"LISTENING" /C:"侦听" > nul 2>&1
 if errorlevel 1 (
     echo Starting multi-space browser...
     start "" "%BROWSER_EXE%" --remote-debugging-port=%CDP_PORT%
