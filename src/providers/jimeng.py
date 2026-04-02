@@ -91,6 +91,7 @@ TOOLBAR_PAGE_FRAGMENT = "renderer/browser.html"
 _CDP_ACTIVATION_LOCKS: dict[str, asyncio.Lock] = {}
 
 logger = logging.getLogger(__name__)
+_TRANSCODE_QUALITIES = ("720p", "480p", "360p", "origin")
 
 # ── Harvest helpers ───────────────────────────────────────────────────────────
 
@@ -276,38 +277,99 @@ class JimengProvider:
             if session is not None:
                 await self._close_session(session)
 
+    def _pick_transcoded_video_url(self, transcoded: Any) -> Optional[str]:
+        if not isinstance(transcoded, dict):
+            return None
+        for quality in _TRANSCODE_QUALITIES:
+            candidate = transcoded.get(quality)
+            if not isinstance(candidate, dict):
+                continue
+            url = str(candidate.get("video_url") or "").strip()
+            if url:
+                return url
+        return None
+
+    def _extract_remote_results_from_asset_payload(
+        self,
+        payload: Any,
+        since_ts: float,
+    ) -> list[RemoteResult]:
+        data = payload.get("data") if isinstance(payload, dict) else None
+        asset_list = data.get("asset_list") if isinstance(data, dict) else None
+        if not isinstance(asset_list, list):
+            return []
+
+        results: list[RemoteResult] = []
+        for asset in asset_list:
+            if not isinstance(asset, dict) or asset.get("type") != 2:
+                continue
+
+            video = asset.get("video")
+            if not isinstance(video, dict):
+                continue
+
+            created_at = float(video.get("created_time") or 0)
+            if created_at > 1e12:
+                created_at = created_at / 1000
+            if created_at < since_ts:
+                continue
+
+            item_list = video.get("item_list")
+            if not isinstance(item_list, list) or not item_list:
+                continue
+
+            first_item = item_list[0]
+            item_video = first_item.get("video") if isinstance(first_item, dict) else None
+            transcoded = item_video.get("transcoded_video") if isinstance(item_video, dict) else None
+            url = self._pick_transcoded_video_url(transcoded)
+            if not url:
+                continue
+
+            results.append(
+                RemoteResult(
+                    url=url,
+                    created_at=created_at,
+                    title=str(asset.get("id") or ""),
+                )
+            )
+        return results
+
     async def list_completed(
         self,
         account: JimengAccountConfig,
         since_ts: float,
     ) -> list[RemoteResult]:
-        """Poll the Jimeng generate page for videos completed after since_ts.
-
-        Connects to the existing CDP session for the account and calls
-        Jimeng's API from within the page context (auth cookies are handled
-        automatically). since_ts is a unix timestamp (float seconds).
-        """
+        """Poll the Jimeng generate page for videos completed after since_ts."""
         timeout_ms = self.config.video.task_timeout_seconds * 1000
         session: SessionHandle | None = None
+        page: Optional[Page] = None
+        captured_responses: list[Any] = []
+
+        def capture_response(response: Any) -> None:
+            if "get_asset_list" in response.url:
+                captured_responses.append(response)
+
         try:
             session = await self._open_session(account=account, reuse_existing_page=True)
             page = await self._ensure_work_page(session, account, "generate", timeout_ms)
+            page.on("response", capture_response)
 
-            results: list[dict] = await page.evaluate(
-                _LIST_COMPLETED_JS,
-                since_ts,
-            )
+            with contextlib.suppress(Exception):
+                await page.reload(wait_until="domcontentloaded", timeout=min(timeout_ms, 20_000))
+            with contextlib.suppress(Exception):
+                await page.wait_for_timeout(3000)
 
-            items: list[RemoteResult] = []
-            for item in results:
-                url = item.get("url", "")
-                if not url:
+            items_by_url: dict[str, RemoteResult] = {}
+            for response in captured_responses:
+                try:
+                    payload = await response.json()
+                except Exception:
                     continue
-                items.append(RemoteResult(
-                    url=url,
-                    created_at=float(item.get("created_at", 0)),
-                    title=item.get("title", ""),
-                ))
+                for item in self._extract_remote_results_from_asset_payload(payload, since_ts):
+                    if item.url not in items_by_url:
+                        items_by_url[item.url] = item
+
+            items = sorted(items_by_url.values(), key=lambda item: item.created_at)
             logger.info(
                 "list_completed: account=%s since=%.0f found=%d",
                 account.name, since_ts, len(items),
@@ -318,6 +380,9 @@ class JimengProvider:
             logger.exception("list_completed failed for account %s", account.name)
             return []
         finally:
+            if page is not None:
+                with contextlib.suppress(Exception):
+                    page.remove_listener("response", capture_response)
             if session is not None:
                 await self._close_session(session)
 
