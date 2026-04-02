@@ -1,0 +1,39 @@
+{
+  "attemptId": "ATTEMPT-20260402-5X3U",
+  "executionCheck": {
+    "runner": "mock",
+    "availability": "available",
+    "passed": true,
+    "issues": [],
+    "exitCode": 0,
+    "lastMessage": "Mock attempt completed."
+  },
+  "staticCheck": {
+    "passed": true,
+    "issues": []
+  },
+  "runtimeCheck": {
+    "passed": true,
+    "issues": []
+  },
+  "semanticCheck": {
+    "verdict": "inconclusive",
+    "criteria": [
+      {
+        "criterionId": "ac-1",
+        "passed": false,
+        "notes": "Missing context: semantic evaluator not provided."
+      }
+    ]
+  },
+  "qualification": {
+    "verdict": "unqualified",
+    "issues": [
+      {
+        "code": "missing-context",
+        "message": "Semantic verification was inconclusive because required context is missing."
+      }
+    ]
+  },
+  "hasRetryableFailures": false
+}
