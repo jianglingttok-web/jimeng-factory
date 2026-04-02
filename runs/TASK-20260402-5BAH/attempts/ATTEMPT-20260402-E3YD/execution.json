@@ -1,0 +1,12 @@
+{
+  "runner": "mock",
+  "availability": "available",
+  "command": "mock",
+  "args": [],
+  "cwd": "E:/即梦内容工厂",
+  "startedAt": "2026-04-02T19:02:35.388Z",
+  "finishedAt": "2026-04-02T19:02:35.391Z",
+  "exitCode": 0,
+  "lastMessage": "Mock attempt completed.",
+  "issues": []
+}
