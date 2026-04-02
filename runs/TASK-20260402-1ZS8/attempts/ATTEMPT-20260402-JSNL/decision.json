@@ -1,0 +1,6 @@
+{
+  "nextStep": "escalate",
+  "reasons": [
+    "Semantic verification was inconclusive because required context is missing."
+  ]
+}
