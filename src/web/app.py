@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import load_config
@@ -100,6 +101,15 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(router)
+    # Serve frontend static files in production (when dist/ exists).
+    dist_dir = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+    if dist_dir.is_dir():
+        @app.get("/{full_path:path}")
+        async def serve_spa(full_path: str):
+            file_path = dist_dir / full_path
+            if file_path.is_file():
+                return FileResponse(file_path)
+            return FileResponse(dist_dir / "index.html")
     return app
 
 
