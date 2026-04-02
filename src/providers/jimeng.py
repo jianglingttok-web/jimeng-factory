@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
 import re
 import time
 from dataclasses import dataclass
@@ -356,6 +357,15 @@ class JimengProvider:
         reuse_existing_page: bool,
     ) -> SessionHandle:
         cdp_url = self._effective_cdp_url(account)
+        # Ensure local CDP connections bypass any HTTP proxy.
+        for var in ("no_proxy", "NO_PROXY"):
+            existing = os.environ.get(var, "")
+            if "127.0.0.1" not in existing:
+                os.environ[var] = (
+                    f"127.0.0.1,localhost,{existing}"
+                    if existing
+                    else "127.0.0.1,localhost"
+                )
         playwright = await async_playwright().start()
         browser = await playwright.chromium.connect_over_cdp(cdp_url)
         if not browser.contexts:
