@@ -5,8 +5,8 @@
   "rawRequest": "测试链路",
   "status": "blocked",
   "createdAt": "2026-04-02T17:00:50.153Z",
-  "updatedAt": "2026-04-02T17:31:13.679Z",
+  "updatedAt": "2026-04-02T17:41:17.751Z",
   "priority": "medium",
   "requester": "tred",
-  "currentAttemptId": "ATTEMPT-20260402-63LV"
+  "currentAttemptId": "ATTEMPT-20260402-WLID"
 }
