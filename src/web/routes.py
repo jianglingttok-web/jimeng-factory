@@ -63,6 +63,19 @@ async def create_product(body: CreateProductRequest, request: Request) -> dict[s
         raise HTTPException(status_code=409, detail=f"Product '{body.name}' already exists")
 
 
+@router.put("/products/{name}")
+async def update_product_route(name: str, request: Request) -> dict[str, Any]:
+    from src.runtime.product_store import update_product as _update
+
+    body = await request.json()
+    variants = body.get("variants", [])
+    data_dir = request.app.state.config.paths.data_dir
+    try:
+        return _update(data_dir, name, variants)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Product '{name}' not found")
+
+
 @router.post("/products/{name}/images")
 async def upload_product_images(
     name: str,
@@ -176,6 +189,17 @@ async def retry_failed_tasks(request: Request) -> dict[str, Any]:
     storage = request.app.state.storage
     count = storage.reset_failed_tasks()
     return {"reset": count}
+
+
+@router.post("/tasks/stop-batch")
+async def stop_tasks_batch(request: Request) -> dict[str, Any]:
+    body = await request.json()
+    task_ids = body.get("task_ids", [])
+    if not isinstance(task_ids, list):
+        return {"stopped": 0, "error": "task_ids must be a list"}
+    storage = request.app.state.storage
+    count = storage.stop_tasks_batch(task_ids)
+    return {"stopped": count}
 
 
 @router.post("/tasks/{task_id}/stop")

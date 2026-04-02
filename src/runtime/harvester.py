@@ -26,6 +26,7 @@ class Harvester:
 
         Returns the number of tasks that were downloaded this cycle.
         """
+        max_retries = self.config.video.max_retries
         generating_tasks = self.storage.list_tasks(status=TaskStatus.GENERATING)
         if not generating_tasks:
             return 0
@@ -116,7 +117,11 @@ class Harvester:
                     )
                 except Exception as exc:  # noqa: BLE001
                     logger.exception("Harvester download failed for task %s", task.task_id)
-                    self.storage.mark_download_failed(task.task_id, str(exc))
+                    self.storage.mark_download_failed(
+                        task.task_id,
+                        str(exc),
+                        max_retries=max_retries,
+                    )
                     continue
 
                 if receipt.ok and receipt.path:
@@ -125,7 +130,9 @@ class Harvester:
                     logger.info("Downloaded task %s → %s", task.task_id, receipt.path)
                 else:
                     self.storage.mark_download_failed(
-                        task.task_id, receipt.error or "download returned no path"
+                        task.task_id,
+                        receipt.error or "download returned no path",
+                        max_retries=max_retries,
                     )
 
         return downloaded

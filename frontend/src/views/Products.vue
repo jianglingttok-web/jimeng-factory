@@ -62,6 +62,7 @@
         <strong>{{ p.name }}</strong>
         <div style="display:flex;gap:8px">
           <span style="color:#888;font-size:12px;line-height:28px">{{ p.prompt_variants?.length || 0 }} 个脚本</span>
+          <button class="btn-primary btn-sm" @click="startEditing(p)">编辑</button>
           <button class="btn-danger btn-sm" @click="doDelete(p.name)">删除</button>
         </div>
       </div>
@@ -74,7 +75,43 @@
       </div>
       <div v-else style="color:#bbb;font-size:12px;margin-bottom:8px">暂无图片</div>
 
-      <div v-if="p.prompt_variants?.length" style="display:flex;flex-direction:column;gap:4px">
+      <div
+        v-if="editingProduct === p.name"
+        style="border-top:1px solid #f0f0f0;padding-top:12px;display:flex;flex-direction:column;gap:8px"
+      >
+        <div class="alert alert-error" v-if="editError">{{ editError }}</div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <label style="margin:0">编辑 Prompt 变体</label>
+          <button type="button" class="btn-primary btn-sm" @click="addEditPrompt">+ 添加 prompt</button>
+        </div>
+
+        <div
+          v-for="(variant, i) in editingVariants"
+          :key="`${p.name}-${i}`"
+          style="display:flex;gap:8px;align-items:flex-start"
+        >
+          <textarea
+            v-model="variant.prompt"
+            :placeholder="`脚本 ${i + 1}`"
+            rows="3"
+            style="flex:1;padding:6px 10px;border:1px solid #d9d9d9;border-radius:4px;font-size:13px;resize:vertical"
+          />
+          <button class="btn-danger btn-sm" @click="removeEditPrompt(i)" style="margin-top:4px">删</button>
+        </div>
+
+        <div style="display:flex;gap:8px">
+          <button class="btn-primary" @click="saveProductEdits(p.name)" :disabled="savingEdit">
+            {{ savingEdit ? '保存中...' : '保存' }}
+          </button>
+          <button @click="cancelEditing" style="background:#f0f0f0">取消</button>
+        </div>
+      </div>
+
+      <div
+        v-else-if="p.prompt_variants?.length"
+        style="display:flex;flex-direction:column;gap:4px"
+      >
         <div
           v-for="v in p.prompt_variants" :key="v.id"
           style="background:#fafafa;padding:6px 10px;border-radius:4px;font-size:13px;color:#555"
@@ -86,7 +123,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { fetchProducts } from '../api.js'
+import { fetchProducts, updateProduct } from '../api.js'
 
 const products = ref([])
 const showForm = ref(false)
@@ -95,11 +132,28 @@ const formError = ref('')
 const fileInput = ref(null)
 const selectedFiles = ref([])
 const previewUrls = ref([])
+const editingProduct = ref('')
+const editingVariants = ref([])
+const editError = ref('')
+const savingEdit = ref(false)
 
 const newProduct = ref({ name: '', variants: [{ prompt: '' }] })
 
 async function load() {
   products.value = await fetchProducts()
+}
+
+function startEditing(product) {
+  editingProduct.value = product.name
+  editError.value = ''
+  editingVariants.value = (product.prompt_variants || []).map(variant => ({
+    id: variant.id,
+    title: variant.title || '',
+    prompt: variant.prompt || '',
+  }))
+  if (!editingVariants.value.length) {
+    editingVariants.value = [{ prompt: '', title: '' }]
+  }
 }
 
 function addPrompt() {
@@ -108,6 +162,14 @@ function addPrompt() {
 
 function removePrompt(i) {
   if (newProduct.value.variants.length > 1) newProduct.value.variants.splice(i, 1)
+}
+
+function addEditPrompt() {
+  editingVariants.value.push({ prompt: '', title: '' })
+}
+
+function removeEditPrompt(i) {
+  if (editingVariants.value.length > 1) editingVariants.value.splice(i, 1)
 }
 
 function onFilesSelected(e) {
@@ -122,6 +184,12 @@ function cancelForm() {
   selectedFiles.value = []
   previewUrls.value = []
   if (fileInput.value) fileInput.value.value = ''
+}
+
+function cancelEditing() {
+  editingProduct.value = ''
+  editingVariants.value = []
+  editError.value = ''
 }
 
 async function createProduct() {
@@ -164,7 +232,37 @@ async function createProduct() {
 async function doDelete(name) {
   if (!confirm(`确认删除产品「${name}」？`)) return
   await fetch(`/api/products/${encodeURIComponent(name)}`, { method: 'DELETE' })
+  if (editingProduct.value === name) {
+    cancelEditing()
+  }
   await load()
+}
+
+async function saveProductEdits(name) {
+  editError.value = ''
+  const variants = editingVariants.value
+    .map(variant => ({
+      ...(variant.id ? { id: variant.id } : {}),
+      title: variant.title || variant.prompt.trim().slice(0, 20),
+      prompt: variant.prompt.trim(),
+    }))
+    .filter(variant => variant.prompt)
+
+  if (!variants.length) {
+    editError.value = '至少需要一个 Prompt'
+    return
+  }
+
+  savingEdit.value = true
+  try {
+    await updateProduct(name, variants)
+    await load()
+    cancelEditing()
+  } catch (e) {
+    editError.value = e.message
+  } finally {
+    savingEdit.value = false
+  }
 }
 
 onMounted(load)

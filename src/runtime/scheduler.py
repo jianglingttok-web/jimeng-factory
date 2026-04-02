@@ -35,6 +35,7 @@ class Scheduler:
     async def run_once(self) -> list[str]:
         accounts = self.storage.get_accounts(status=AccountStatus.ACTIVE)
         submitted: list[str] = []
+        max_retries = self.config.video.max_retries
 
         for account in accounts:
             slots = max(0, account.max_concurrent - account.generating_count)
@@ -52,7 +53,11 @@ class Scheduler:
                 try:
                     acct_cfg = self.provider.get_account(account.name)
                 except ValueError as exc:
-                    self.storage.mark_submit_failed(task.task_id, f"{type(exc).__name__}: {exc}" or repr(exc))
+                    self.storage.mark_submit_failed(
+                        task.task_id,
+                        f"{type(exc).__name__}: {exc}" or repr(exc),
+                        max_retries=max_retries,
+                    )
                     logger.warning("Account lookup failed for %s: %s", account.name, exc)
                     continue
 
@@ -61,6 +66,7 @@ class Scheduler:
                     self.storage.mark_submit_failed(
                         task.task_id,
                         f"No images found for product '{task.product_name}'",
+                        max_retries=max_retries,
                     )
                     logger.warning(
                         "No images for product '%s', task %s failed",
@@ -76,11 +82,19 @@ class Scheduler:
                         image_paths=image_paths,
                     )
                 except asyncio.CancelledError:
-                    self.storage.mark_submit_failed(task.task_id, "cancelled")
+                    self.storage.mark_submit_failed(
+                        task.task_id,
+                        "cancelled",
+                        max_retries=max_retries,
+                    )
                     raise
                 except Exception as exc:  # noqa: BLE001
                     logger.exception("Submit failed for task %s", task.task_id)
-                    self.storage.mark_submit_failed(task.task_id, f"{type(exc).__name__}: {exc}" or repr(exc))
+                    self.storage.mark_submit_failed(
+                        task.task_id,
+                        f"{type(exc).__name__}: {exc}" or repr(exc),
+                        max_retries=max_retries,
+                    )
                     continue
 
                 if receipt.ok:
@@ -88,7 +102,11 @@ class Scheduler:
                     submitted.append(task.task_id)
                     logger.info("Submitted task %s for account %s", task.task_id, account.name)
                 else:
-                    self.storage.mark_submit_failed(task.task_id, receipt.error or "unknown error")
+                    self.storage.mark_submit_failed(
+                        task.task_id,
+                        receipt.error or "unknown error",
+                        max_retries=max_retries,
+                    )
                     logger.warning(
                         "Submit rejected for task %s: %s", task.task_id, receipt.error,
                     )

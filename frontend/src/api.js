@@ -22,6 +22,14 @@ export function fetchProducts() {
   return request('/api/products')
 }
 
+export function updateProduct(name, variants) {
+  return request(`/api/products/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ variants }),
+  })
+}
+
 export function fetchTasks(params = {}) {
   const q = new URLSearchParams()
   if (params.status) q.set('status', params.status)

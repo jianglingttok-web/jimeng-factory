@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS accounts (
 
 # Migration: add new columns to existing databases
 _MIGRATIONS = [
+    "ALTER TABLE tasks ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE tasks ADD COLUMN max_retries INTEGER NOT NULL DEFAULT 2",
     "ALTER TABLE tasks ADD COLUMN submitted_at REAL",
     "ALTER TABLE tasks ADD COLUMN result_url TEXT",
 ]
@@ -196,26 +198,46 @@ class Storage:
             connection.commit()
         return self.get_task(task_id)
 
-    def mark_submit_failed(self, task_id: str, error: str) -> Task | None:
-        """Mark a task as FAILED (from SUBMITTING) and decrement generating_count."""
+    def mark_submit_failed(
+        self,
+        task_id: str,
+        error: str,
+        *,
+        max_retries: int = 0,
+    ) -> Task | None:
+        """Retry a failed submission until retry budget is exhausted."""
         now = time.time()
         with self.connect() as connection:
             task_row = connection.execute(
-                "SELECT account_name FROM tasks WHERE task_id = ? AND status = ?",
+                """
+                SELECT account_name, retry_count, max_retries
+                FROM tasks
+                WHERE task_id = ? AND status = ?
+                """,
                 (task_id, TaskStatus.SUBMITTING.value),
             ).fetchone()
 
             if task_row:
+                retry_count = int(task_row["retry_count"] or 0)
+                retry_limit = max(0, max_retries)
+                next_status = (
+                    TaskStatus.PENDING.value
+                    if retry_count < retry_limit
+                    else TaskStatus.FAILED.value
+                )
+                next_error = None if next_status == TaskStatus.PENDING.value else error
+                next_retry_count = retry_count + 1 if next_status == TaskStatus.PENDING.value else retry_count
                 connection.execute(
                     """
                     UPDATE tasks
-                    SET status = ?, error_message = ?, retry_count = retry_count + 1,
+                    SET status = ?, error_message = ?, retry_count = ?,
                         updated_at = ?
                     WHERE task_id = ? AND status = ?
                     """,
                     (
-                        TaskStatus.FAILED.value,
-                        error,
+                        next_status,
+                        next_error,
+                        next_retry_count,
                         now,
                         task_id,
                         TaskStatus.SUBMITTING.value,
@@ -244,6 +266,65 @@ class Storage:
                 """,
                 (TaskStatus.PENDING.value, now, TaskStatus.FAILED.value),
             )
+            connection.commit()
+        return cursor.rowcount
+
+    def stop_tasks_batch(self, task_ids: list[str]) -> int:
+        """Stop multiple tasks at once. Only tasks in cancellable states are affected."""
+        if not task_ids:
+            return 0
+
+        now = time.time()
+        cancellable = (
+            TaskStatus.PENDING.value,
+            TaskStatus.SUBMITTING.value,
+            TaskStatus.GENERATING.value,
+            TaskStatus.DOWNLOADING.value,
+        )
+        countable = {
+            TaskStatus.SUBMITTING.value,
+            TaskStatus.GENERATING.value,
+            TaskStatus.DOWNLOADING.value,
+        }
+        placeholders = ",".join("?" for _ in task_ids)
+        status_placeholders = ",".join("?" for _ in cancellable)
+
+        with self.connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT task_id, account_name, status
+                FROM tasks
+                WHERE task_id IN ({placeholders}) AND status IN ({status_placeholders})
+                """,
+                [*task_ids, *cancellable],
+            ).fetchall()
+            if not rows:
+                return 0
+
+            cursor = connection.execute(
+                f"""
+                UPDATE tasks
+                SET status = ?, error_message = ?, updated_at = ?
+                WHERE task_id IN ({placeholders}) AND status IN ({status_placeholders})
+                """,
+                [TaskStatus.FAILED.value, "stopped by user", now, *task_ids, *cancellable],
+            )
+
+            decrements: dict[str, int] = {}
+            for row in rows:
+                if row["status"] in countable:
+                    decrements[row["account_name"]] = decrements.get(row["account_name"], 0) + 1
+
+            for account_name, delta in decrements.items():
+                connection.execute(
+                    """
+                    UPDATE accounts
+                    SET generating_count = MAX(generating_count - ?, 0)
+                    WHERE name = ?
+                    """,
+                    (delta, account_name),
+                )
+
             connection.commit()
         return cursor.rowcount
 
@@ -291,25 +372,52 @@ class Storage:
             connection.commit()
         return self.get_task(task_id)
 
-    def mark_download_failed(self, task_id: str, error: str) -> Task | None:
-        """Mark a task as FAILED from DOWNLOADING; decrement generating_count."""
+    def mark_download_failed(
+        self,
+        task_id: str,
+        error: str,
+        *,
+        max_retries: int = 0,
+    ) -> Task | None:
+        """Retry a failed download until retry budget is exhausted."""
         now = time.time()
         with self.connect() as connection:
             task_row = connection.execute(
-                "SELECT account_name FROM tasks WHERE task_id = ?",
-                (task_id,),
+                """
+                SELECT account_name, retry_count
+                FROM tasks
+                WHERE task_id = ? AND status = ?
+                """,
+                (task_id, TaskStatus.DOWNLOADING.value),
             ).fetchone()
 
-            connection.execute(
-                """
-                UPDATE tasks
-                SET status = ?, error_message = ?, retry_count = retry_count + 1,
-                    updated_at = ?
-                WHERE task_id = ?
-                """,
-                (TaskStatus.FAILED.value, error, now, task_id),
-            )
             if task_row:
+                retry_count = int(task_row["retry_count"] or 0)
+                retry_limit = max(0, max_retries)
+                next_status = (
+                    TaskStatus.GENERATING.value
+                    if retry_count < retry_limit
+                    else TaskStatus.FAILED.value
+                )
+                next_error = None if next_status == TaskStatus.GENERATING.value else error
+                next_retry_count = retry_count + 1 if next_status == TaskStatus.GENERATING.value else retry_count
+                connection.execute(
+                    """
+                    UPDATE tasks
+                    SET status = ?, error_message = ?, retry_count = ?,
+                        updated_at = ?
+                    WHERE task_id = ? AND status = ?
+                    """,
+                    (
+                        next_status,
+                        next_error,
+                        next_retry_count,
+                        now,
+                        task_id,
+                        TaskStatus.DOWNLOADING.value,
+                    ),
+                )
+            if task_row and next_status == TaskStatus.FAILED.value:
                 connection.execute(
                     """
                     UPDATE accounts
