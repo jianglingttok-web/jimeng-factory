@@ -1,0 +1,37 @@
+{
+  "attemptId": "ATTEMPT-20260403-NRBY",
+  "executionCheck": {
+    "runner": "codex-exec",
+    "availability": "unavailable",
+    "passed": false,
+    "issues": [
+      "Official Codex CLI probe failed: spawn EINVAL"
+    ],
+    "exitCode": null,
+    "failedToStart": true
+  },
+  "staticCheck": {
+    "passed": false,
+    "issues": [
+      "Static checks were skipped because execution did not complete successfully."
+    ]
+  },
+  "runtimeCheck": {
+    "passed": false,
+    "issues": []
+  },
+  "semanticCheck": {
+    "verdict": "not-evaluated",
+    "criteria": []
+  },
+  "qualification": {
+    "verdict": "unqualified",
+    "issues": [
+      {
+        "code": "runner-failed",
+        "message": "Official Codex CLI probe failed: spawn EINVAL"
+      }
+    ]
+  },
+  "hasRetryableFailures": true
+}

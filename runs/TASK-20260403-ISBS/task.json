@@ -1,0 +1,12 @@
+{
+  "id": "TASK-20260403-ISBS",
+  "name": "在即梦内容工厂根目录创建 hello.txt，内容为 harness codex test",
+  "description": "在即梦内容工厂根目录创建 hello.txt，内容为 harness codex test",
+  "rawRequest": "在即梦内容工厂根目录创建 hello.txt，内容为 harness codex test",
+  "status": "blocked",
+  "createdAt": "2026-04-03T09:25:20.854Z",
+  "updatedAt": "2026-04-03T09:25:20.868Z",
+  "priority": "medium",
+  "requester": "tred",
+  "currentAttemptId": "ATTEMPT-20260403-NRBY"
+}

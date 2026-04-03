@@ -1,0 +1,4 @@
+{"taskId":"TASK-20260403-ISBS","type":"task-created","payload":{"requester":"tred","priority":"medium"},"id":"EVT-7QVZRQ","timestamp":"2026-04-03T09:25:20.858Z"}
+{"taskId":"TASK-20260403-ISBS","type":"spec-generated","payload":{"acceptanceCriteriaCount":1,"referencesCount":0},"id":"EVT-YDT3LE","timestamp":"2026-04-03T09:25:20.858Z"}
+{"taskId":"TASK-20260403-ISBS","attemptId":"ATTEMPT-20260403-NRBY","type":"attempt-started","payload":{"attemptNumber":1,"workspacePath":"E:/即梦内容工厂"},"id":"EVT-34VJ92","timestamp":"2026-04-03T09:25:20.866Z"}
+{"taskId":"TASK-20260403-ISBS","attemptId":"ATTEMPT-20260403-NRBY","type":"escalated","payload":{"issues":["Official Codex CLI probe failed: spawn EINVAL","Static checks were skipped because execution did not complete successfully."]},"id":"EVT-GBIPCO","timestamp":"2026-04-03T09:25:20.868Z"}

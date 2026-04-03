@@ -1,0 +1,16 @@
+{
+  "runner": "codex-exec",
+  "availability": "unavailable",
+  "command": "C:/Users/Administrator/bin/codex.cmd",
+  "args": [
+    "--version"
+  ],
+  "cwd": "E:/即梦内容工厂",
+  "startedAt": "2026-04-03T09:25:20.859Z",
+  "finishedAt": "2026-04-03T09:25:20.865Z",
+  "exitCode": null,
+  "failedToStart": true,
+  "issues": [
+    "Official Codex CLI probe failed: spawn EINVAL"
+  ]
+}
