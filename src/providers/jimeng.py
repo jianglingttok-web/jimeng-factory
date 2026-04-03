@@ -1066,24 +1066,35 @@ class JimengProvider:
     async def _click_toolbar_option(self, page: Page, expected_value: str) -> bool:
         click_kwargs: Dict[str, Any] = {"force": True, "timeout": 10000}
 
-        option = page.get_by_role("option", name=expected_value)
-        if await option.count() > 0:
+        # 1. Exact role match first (avoids "Fast" matching "Fast VIP")
+        option_exact = page.get_by_role("option", name=expected_value, exact=True)
+        if await option_exact.count() > 0:
             with contextlib.suppress(Exception):
-                await option.first.click(**click_kwargs)
+                await option_exact.first.click(**click_kwargs)
                 return True
 
+        # 2. Exact text match
         exact_text = page.get_by_text(expected_value, exact=True)
         if await exact_text.count() > 0:
             with contextlib.suppress(Exception):
                 await exact_text.last.click(**click_kwargs)
                 return True
 
+        # 3. Listbox exact text
         popup_exact = page.locator(f"[role='listbox'] >> text=\"{expected_value}\"")
         if await popup_exact.count() > 0:
             with contextlib.suppress(Exception):
                 await popup_exact.last.click(**click_kwargs)
                 return True
 
+        # 4. Loose role match (fallback for UI variants)
+        option_loose = page.get_by_role("option", name=expected_value)
+        if await option_loose.count() > 0:
+            with contextlib.suppress(Exception):
+                await option_loose.first.click(**click_kwargs)
+                return True
+
+        # 5. Loose text match (last resort)
         loose_text = page.locator(f"text={expected_value}")
         if await loose_text.count() > 0:
             with contextlib.suppress(Exception):
