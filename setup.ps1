@@ -17,7 +17,7 @@ Write-Host "  $pyVer" -ForegroundColor Green
 
 # 2. 安装 Python 依赖
 Write-Host "`n[2/5] 安装 Python 依赖..." -ForegroundColor Yellow
-pip install -r "$ROOT\requirements.txt" --quiet
+python -m pip install -r "$ROOT\requirements.txt" --quiet
 Write-Host "  完成" -ForegroundColor Green
 
 # 3. 安装 Playwright 浏览器内核

@@ -1,14 +1,33 @@
 ﻿# start.ps1 - 即梦内容工厂开发环境一键启动
 
 $ROOT = Split-Path -Parent $MyInvocation.MyCommand.Path
-$BROWSER_EXE = "E:\多空间浏览器\mul-key-chrome\多空间浏览器.exe"
-$CDP_PORT = 9222
 $env:NO_PROXY = "127.0.0.1,localhost"
 
 # 前置检查：config.yaml 是否存在
 if (-not (Test-Path "$ROOT\config.yaml")) {
     Write-Host "错误：config.yaml 不存在。请先运行 setup.ps1" -ForegroundColor Red
     Write-Host "  powershell -ExecutionPolicy Bypass -File `"$ROOT\setup.ps1`""
+    Read-Host "按回车键退出"
+    exit 1
+}
+
+# 从 config.yaml 读取浏览器路径和 CDP 端口
+$cfg = python -c "
+import yaml, sys, os
+sys.stdout.reconfigure(encoding='utf-8')
+with open(os.path.join(r'$ROOT', 'config.yaml'), encoding='utf-8') as f:
+    c = yaml.safe_load(f)
+p = c.get('providers',{}).get('jimeng',{})
+print(p.get('browser_executable_path',''))
+print(p.get('cdp_url','http://127.0.0.1:9222'))
+"
+$BROWSER_EXE = $cfg[0]
+$CDP_URL = $cfg[1]
+$CDP_PORT = if ($CDP_URL -match ':(\d+)$') { $Matches[1] } else { "9222" }
+
+if (-not $BROWSER_EXE -or -not (Test-Path $BROWSER_EXE)) {
+    Write-Host "错误：多空间浏览器路径无效 — $BROWSER_EXE" -ForegroundColor Red
+    Write-Host "  请检查 config.yaml 中的 browser_executable_path" -ForegroundColor Yellow
     Read-Host "按回车键退出"
     exit 1
 }

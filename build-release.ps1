@@ -51,6 +51,11 @@ $excludeFileArgs = $EXCLUDE_FILES | ForEach-Object { "/XF", $_ }
 
 $roboArgs = @($ROOT, $TEMP_DIR, "/E", "/NJH", "/NJS", "/NP", "/NFL", "/NDL") + $excludeDirArgs + $excludeFileArgs
 & robocopy @roboArgs | Out-Null
+if ($LASTEXITCODE -ge 8) {
+    Write-Host "错误：文件复制失败 (robocopy exit code $LASTEXITCODE)" -ForegroundColor Red
+    Remove-Item "$ROOT\.release-staging" -Recurse -Force -ErrorAction SilentlyContinue
+    exit 1
+}
 
 # 3. 清理暂存目录中不需要的内容
 # 删除前端源码中的 node_modules（如果被复制进来）
