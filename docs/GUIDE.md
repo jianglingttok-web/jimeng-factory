@@ -3,34 +3,29 @@
 ## 系统要求
 
 - Windows 10/11
-- Python 3.10+（推荐 3.12+）
-- 多空间浏览器（mul-key-chrome）
+- 多空间浏览器（mul-key-chrome）— 联系技术获取安装包
 
 ## 快速安装
 
-### 1. 安装前置软件
-
-- Python: https://python.org/downloads/ （安装时勾选 "Add to PATH"）
-- 多空间浏览器: 联系技术获取安装包
-
-### 2. 运行安装脚本
+### 1. 运行安装脚本
 
 双击 `setup.bat`
 
 脚本会自动：
 
+- 检测并安装 Python（如未安装，通过 winget 自动安装）
 - 安装 Python 依赖
 - 安装 Playwright 浏览器内核
 - 创建配置文件
 
-### 3. 修改配置
+### 2. 修改配置
 
 编辑 `config.yaml`，主要修改：
 
 - `browser_executable_path`: 多空间浏览器的实际安装路径
 - `default_concurrency`: 每账号并发任务数（默认 10）
 
-### 4. 启动
+### 3. 启动
 
 双击 `start.bat`
 
