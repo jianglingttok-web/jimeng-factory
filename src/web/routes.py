@@ -209,14 +209,18 @@ async def stop_task(task_id: str, request: Request) -> dict[str, Any]:
     task = storage.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    if task.status not in (TaskStatus.PENDING, TaskStatus.SUBMITTING):
+    cancellable = (
+        TaskStatus.PENDING,
+        TaskStatus.SUBMITTING,
+        TaskStatus.GENERATING,
+        TaskStatus.DOWNLOADING,
+    )
+    if task.status not in cancellable:
         raise HTTPException(status_code=409, detail=f"Cannot stop task in status '{task.status}'")
-    if task.status == TaskStatus.SUBMITTING:
-        updated = storage.mark_submit_failed(task_id, "stopped by user")
-    else:
-        updated = storage.update_task_status(
-            task_id, TaskStatus.FAILED, error_message="stopped by user"
-        )
+    stopped = storage.stop_tasks_batch([task_id])
+    if not stopped:
+        raise HTTPException(status_code=409, detail="Task could not be stopped")
+    updated = storage.get_task(task_id)
     return updated.model_dump(mode="json") if updated else {}
 
 

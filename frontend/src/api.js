@@ -65,6 +65,14 @@ export function stopTask(taskId) {
   return request(`/api/tasks/${taskId}/stop`, { method: 'POST' })
 }
 
+export function stopTasksBatch(taskIds) {
+  return request('/api/tasks/stop-batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task_ids: taskIds }),
+  })
+}
+
 export function retryFailedTasks() {
   return request('/api/tasks/retry-failed', { method: 'POST' })
 }
