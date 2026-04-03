@@ -12,15 +12,18 @@ if (-not (Test-Path "$ROOT\config.yaml")) {
 }
 
 # 从 config.yaml 读取浏览器路径和 CDP 端口
+$prevEncoding = [Console]::OutputEncoding
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$env:PYTHONIOENCODING = "utf-8"
 $cfg = python -c "
 import yaml, sys, os
-sys.stdout.reconfigure(encoding='utf-8')
 with open(os.path.join(r'$ROOT', 'config.yaml'), encoding='utf-8') as f:
     c = yaml.safe_load(f)
 p = c.get('providers',{}).get('jimeng',{})
 print(p.get('browser_executable_path',''))
 print(p.get('cdp_url','http://127.0.0.1:9222'))
 "
+[Console]::OutputEncoding = $prevEncoding
 $BROWSER_EXE = $cfg[0]
 $CDP_URL = $cfg[1]
 $CDP_PORT = if ($CDP_URL -match ':(\d+)$') { $Matches[1] } else { "9222" }
