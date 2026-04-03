@@ -1,0 +1,6 @@
+{
+  "nextStep": "escalate",
+  "reasons": [
+    "Codex exclusive lock: 2 codex.exe process(es) already running. Kill existing sessions before dispatching new tasks to prevent cross-project contamination."
+  ]
+}

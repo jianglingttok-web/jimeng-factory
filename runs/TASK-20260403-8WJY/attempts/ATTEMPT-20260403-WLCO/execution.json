@@ -1,0 +1,16 @@
+{
+  "runner": "codex-exec",
+  "availability": "unavailable",
+  "command": "codex",
+  "args": [
+    "--version"
+  ],
+  "cwd": "E:/即梦内容工厂",
+  "startedAt": "2026-04-03T08:36:18.155Z",
+  "finishedAt": "2026-04-03T08:36:18.319Z",
+  "exitCode": null,
+  "failedToStart": true,
+  "issues": [
+    "Codex exclusive lock: 2 codex.exe process(es) already running. Kill existing sessions before dispatching new tasks to prevent cross-project contamination."
+  ]
+}

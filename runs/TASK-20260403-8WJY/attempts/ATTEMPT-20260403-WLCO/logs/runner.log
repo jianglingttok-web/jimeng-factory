@@ -1,0 +1,2 @@
+[2026-04-03T08:36:18.155Z] Attempt created for task TASK-20260403-8WJY in workspace E:/即梦内容工厂
+[2026-04-03T08:36:18.319Z] Transport codex-exec probe: unavailable (Codex exclusive lock: 2 codex.exe process(es) already running. Kill existing sessions before dispatching new tasks to prevent cross-project contamination.)
