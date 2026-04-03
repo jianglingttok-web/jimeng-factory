@@ -1022,6 +1022,13 @@ class JimengProvider:
                 await toolbar.scroll_into_view_if_needed()
                 await page.wait_for_timeout(200)
 
+    @staticmethod
+    def _combobox_value_matches(expected: str, actual: str) -> bool:
+        """Strict equality check for combobox values.
+        Strips whitespace; compares case-insensitively.
+        'Seedance 2.0 Fast' must NOT match 'Seedance 2.0 Fast VIP'."""
+        return expected.strip().lower() == actual.strip().lower()
+
     async def _select_toolbar_combobox_value(self, page: Page, toolbar_index: int, expected_value: str) -> None:
         last_error = f"Could not select toolbar option: {expected_value}"
         for _attempt in range(3):
@@ -1032,7 +1039,7 @@ class JimengProvider:
 
             combo = toolbar_comboboxes.nth(toolbar_index)
             current_value = await self._read_combobox_value(combo)
-            if expected_value in current_value:
+            if self._combobox_value_matches(expected_value, current_value):
                 return
 
             with contextlib.suppress(Exception):
@@ -1053,7 +1060,7 @@ class JimengProvider:
 
             await page.wait_for_timeout(350)
             current_value = await self._read_combobox_value(combo)
-            if expected_value in current_value:
+            if self._combobox_value_matches(expected_value, current_value):
                 return
 
             last_error = f"Toolbar option click did not stick: expected {expected_value}, got {current_value or '<empty>'}"
@@ -1138,8 +1145,8 @@ class JimengProvider:
 
     async def _has_visible_exact_text(self, page: Page, expected_value: str) -> bool:
         candidates = [
-            page.get_by_role("button", name=expected_value),
-            page.get_by_role("option", name=expected_value),
+            page.get_by_role("button", name=expected_value, exact=True),
+            page.get_by_role("option", name=expected_value, exact=True),
             page.locator(f"[role='listbox'] >> text=\"{expected_value}\""),
             page.get_by_text(expected_value, exact=True),
         ]
@@ -1153,8 +1160,8 @@ class JimengProvider:
 
     async def _click_visible_exact_text(self, page: Page, expected_value: str) -> bool:
         candidates = [
-            page.get_by_role("button", name=expected_value),
-            page.get_by_role("option", name=expected_value),
+            page.get_by_role("button", name=expected_value, exact=True),
+            page.get_by_role("option", name=expected_value, exact=True),
             page.locator(f"[role='listbox'] >> text=\"{expected_value}\""),
             page.get_by_text(expected_value, exact=True),
         ]
