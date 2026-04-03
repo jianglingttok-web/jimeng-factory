@@ -11,22 +11,19 @@ if (-not (Test-Path "$ROOT\config.yaml")) {
     exit 1
 }
 
-# 从 config.yaml 读取浏览器路径和 CDP 端口
-$prevEncoding = [Console]::OutputEncoding
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$env:PYTHONIOENCODING = "utf-8"
-$cfg = python -c "
-import yaml, sys, os
-with open(os.path.join(r'$ROOT', 'config.yaml'), encoding='utf-8') as f:
-    c = yaml.safe_load(f)
-p = c.get('providers',{}).get('jimeng',{})
-print(p.get('browser_executable_path',''))
-print(p.get('cdp_url','http://127.0.0.1:9222'))
-"
-[Console]::OutputEncoding = $prevEncoding
-$BROWSER_EXE = $cfg[0]
-$CDP_URL = $cfg[1]
-$CDP_PORT = if ($CDP_URL -match ':(\d+)$') { $Matches[1] } else { "9222" }
+# 从 config.yaml 读取浏览器路径和 CDP 端口（纯 PowerShell，不依赖 Python）
+$configLines = Get-Content "$ROOT\config.yaml" -Encoding UTF8
+$BROWSER_EXE = ""
+$CDP_URL = ""
+foreach ($line in $configLines) {
+    if ($line -match '^\s*browser_executable_path:\s*"?([^"#]+)"?') {
+        $BROWSER_EXE = $Matches[1].Trim()
+    }
+    if ($line -match '^\s*cdp_url:\s*"?([^"#]+)"?') {
+        $CDP_URL = $Matches[1].Trim()
+    }
+}
+$CDP_PORT = if ($CDP_URL -match ':(\d+)') { $Matches[1] } else { "9222" }
 
 if (-not $BROWSER_EXE -or -not (Test-Path $BROWSER_EXE)) {
     Write-Host "错误：多空间浏览器路径无效 — $BROWSER_EXE" -ForegroundColor Red
