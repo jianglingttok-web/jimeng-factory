@@ -11,6 +11,14 @@ from pydantic import BaseModel, Field
 class WebConfig(BaseModel):
     host: str = '127.0.0.1'
     port: int = 8001
+    cors_origins: list[str] = Field(
+        default_factory=lambda: [
+            'http://localhost:5173',
+            'http://localhost:5174',
+            'http://127.0.0.1:5173',
+            'http://127.0.0.1:8001',
+        ]
+    )
 
 
 class PathsConfig(BaseModel):
