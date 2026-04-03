@@ -1,0 +1,6 @@
+{
+  "nextStep": "escalate",
+  "reasons": [
+    "codex exec exited with code 2."
+  ]
+}
