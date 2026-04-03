@@ -1,0 +1,8 @@
+{
+  "taskId": "TASK-20260403-ISWZ",
+  "decision": "retry",
+  "source": "feishu-text",
+  "operator": "ou_0c5b0c6c802352985c0b33430b72819c",
+  "instruction": "可以创建 如果不行重新给你审核",
+  "timestamp": "2026-04-03T09:34:56.565Z"
+}
