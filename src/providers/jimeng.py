@@ -95,81 +95,6 @@ _TRANSCODE_QUALITIES = ("720p", "480p", "360p", "origin")
 
 # ── Harvest helpers ───────────────────────────────────────────────────────────
 
-# JavaScript injected via page.evaluate to query Jimeng's generation history.
-# Runs inside the page context so auth cookies are used automatically.
-# Tries multiple known endpoint paths; logs which one succeeds.
-# Returns a list of {url, created_at, title} for completed videos.
-_LIST_COMPLETED_JS = """
-async (since_ts) => {
-    const ENDPOINTS = [
-        ['/mweb/v1/query_video_generator_list',        {size: 50, sort_type: 1}],
-        ['/mweb/v1/query_generate_task_list',          {page_size: 50}],
-        ['/mweb/v1/batch_query_generate_video',        {size: 50}],
-        ['/mweb/v1/list_generate_record',              {page_size: 50}],
-        ['/mweb/v1/query_batch_record_with_task',      {size: 50}],
-    ];
-
-    const SUCCESS_STATUSES = new Set([
-        'generate_success', 'success', 'succeed', 'completed', 'done',
-    ]);
-
-    for (const [path, body] of ENDPOINTS) {
-        let data;
-        try {
-            const r = await fetch('https://jimeng.jianying.com' + path, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                credentials: 'include',
-                body: JSON.stringify(body),
-            });
-            if (!r.ok) continue;
-            const json = await r.json();
-            data = json?.data;
-            if (!data) continue;
-        } catch(e) {
-            continue;
-        }
-
-        // Try known list keys
-        const list = data.generate_list || data.items || data.tasks
-                     || data.list || data.records || data.results;
-        if (!Array.isArray(list) || list.length === 0) continue;
-
-        const results = [];
-        for (const item of list) {
-            const status = (item.status || '').toLowerCase().replace(/[_\\s]/g, '_');
-            if (!SUCCESS_STATUSES.has(status)) continue;
-
-            // Extract timestamp (seconds)
-            let ts = item.create_time || item.finish_time
-                     || item.created_at || item.updated_at || 0;
-            if (ts > 1e12) ts = ts / 1000;  // ms → s
-            if (ts < since_ts) continue;
-
-            // Extract video URL
-            const url = item.video_url || item.url
-                || item.result?.video_url
-                || item.videos?.[0]?.url
-                || item.output?.url || '';
-            if (!url) continue;
-
-            results.push({
-                url,
-                created_at: ts,
-                title: item.title || item.name || item.id || '',
-            });
-        }
-
-        console.log('[jimeng-factory] list_completed via ' + path + ': ' + results.length + ' results');
-        return results;
-    }
-
-    console.warn('[jimeng-factory] list_completed: all endpoints failed or returned no data');
-    return [];
-}
-"""
-
-
 def _download_url_sync(url: str, dest_path: str) -> None:
     """Synchronous download helper (run via asyncio.to_thread)."""
     req = urllib_request.Request(
@@ -526,7 +451,7 @@ class JimengProvider:
             return None
         return page
 
-    # ── CDP control API (for space activation) ────────────────────────────────
+    # ── CDP control API (for space activation) ─────────────────────────────────
 
     def _control_base_url(self, account: JimengAccountConfig) -> Optional[str]:
         if account.web_port is None:
@@ -605,7 +530,7 @@ class JimengProvider:
             break
         return identity
 
-    # ── Page identity helpers ─────────────────────────────────────────────────
+    # ── Page identity helpers ──────────────────────────────────────────────────
 
     @staticmethod
     def _normalize_identity(value: Any) -> Optional[str]:
@@ -910,7 +835,7 @@ class JimengProvider:
 
         raise ValueError(f"Unsupported Jimeng page kind: {kind}")
 
-    # ── Page readiness checks ─────────────────────────────────────────────────
+    # ── Page readiness checks ──────────────────────────────────────────────────
 
     async def _has_submission_surface(self, page: Page) -> bool:
         for selector in SUBMISSION_SURFACE_SELECTORS:
@@ -963,7 +888,7 @@ class JimengProvider:
                     return "Current browser session is not logged in to Jimeng."
         return None
 
-    # ── Submission preparation ────────────────────────────────────────────────
+    # ── Submission preparation ─────────────────────────────────────────────────
 
     async def _prepare_submission_page(
         self,
@@ -1409,7 +1334,7 @@ class JimengProvider:
         await page.wait_for_timeout(800)
         return strategy
 
-    # ── Generation slot + submit ──────────────────────────────────────────────
+    # ── Generation slot + submit ───────────────────────────────────────────────
 
     async def _read_generation_progress(self, page: Page) -> Optional[tuple[int, int]]:
         for selector in PROGRESS_SELECTORS:
