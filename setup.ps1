@@ -63,4 +63,3 @@ Write-Host "`n=== 安装完成 ===" -ForegroundColor Cyan
 Write-Host "下一步：" -ForegroundColor White
 Write-Host "  1. 编辑 config.yaml 中的 browser_executable_path（多空间浏览器路径）"
 Write-Host "  2. 双击 start.bat 启动系统"
-Write-Host "  3. 打开 http://localhost:5173 或 http://localhost:8001"

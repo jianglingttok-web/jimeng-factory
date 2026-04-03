@@ -27,27 +27,26 @@ $EXCLUDE_DIRS = @(
     "frontend\node_modules",
     "frontend\src",
     "docs\handoffs",
+    "scripts",
     "__pycache__",
     ".release-staging"
 )
 
 $EXCLUDE_FILES = @(
     "config.yaml",
+    "config.example.yaml",
     "build-release.ps1",
+    "CLAUDE.md",
+    ".gitignore",
     "*.zip",
     "*.pyc"
 )
 
-# 1. 检查 frontend/dist 是否存在
+# 1. 前置检查：frontend/dist 必须已编译
 if (-not (Test-Path "$ROOT\frontend\dist\index.html")) {
-    Write-Host "前端未编译，先执行 npm run build..." -ForegroundColor Yellow
-    Push-Location "$ROOT\frontend"
-    npm run build
-    Pop-Location
-    if (-not (Test-Path "$ROOT\frontend\dist\index.html")) {
-        Write-Host "错误：前端编译失败" -ForegroundColor Red
-        exit 1
-    }
+    Write-Host "错误：frontend/dist 不存在，请先编译前端" -ForegroundColor Red
+    Write-Host "  cd frontend && npm install && npm run build" -ForegroundColor Yellow
+    exit 1
 }
 
 # 2. 用 robocopy 复制文件（排除开发目录）
@@ -64,13 +63,15 @@ if ($LASTEXITCODE -ge 8) {
 }
 
 # 3. 清理暂存目录中的开发残留
-# __pycache__ 可能嵌套在子目录
 Get-ChildItem -Path $TEMP_DIR -Directory -Recurse -Filter "__pycache__" | Remove-Item -Recurse -Force
-# .pyc 文件
 Get-ChildItem -Path $TEMP_DIR -File -Recurse -Filter "*.pyc" | Remove-Item -Force
-# node_modules（如果被复制进来）
 if (Test-Path "$TEMP_DIR\frontend\node_modules") {
     Remove-Item "$TEMP_DIR\frontend\node_modules" -Recurse -Force
+}
+# 前端开发文件（运营只需要 dist）
+foreach ($devFile in @("package.json", "package-lock.json", "vite.config.js", "index.html")) {
+    $p = "$TEMP_DIR\frontend\$devFile"
+    if (Test-Path $p) { Remove-Item $p -Force }
 }
 # 示例产品数据
 if (Test-Path "$TEMP_DIR\data\products") {

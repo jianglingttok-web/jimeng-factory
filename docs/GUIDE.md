@@ -21,7 +21,6 @@
 
 - 安装 Python 依赖
 - 安装 Playwright 浏览器内核
-- 安装前端依赖并编译
 - 创建配置文件
 
 ### 3. 修改配置
@@ -102,8 +101,7 @@ Harvester 每 10 秒检查一次。如果长时间不动：
 
 ### Q: 前端页面打不开
 
-- 开发模式: 访问 `http://localhost:5173`
-- 生产模式: 访问 `http://localhost:8001`（需先 `npm run build`）
+访问 `http://localhost:8001`，确认后端服务已启动。
 
 ## 目录结构
 
