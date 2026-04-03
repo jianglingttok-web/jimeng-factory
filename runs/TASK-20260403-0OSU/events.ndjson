@@ -1,0 +1,4 @@
+{"taskId":"TASK-20260403-0OSU","type":"task-created","payload":{"requester":"tred","priority":"medium"},"id":"EVT-3A5KJT","timestamp":"2026-04-03T08:37:44.970Z"}
+{"taskId":"TASK-20260403-0OSU","type":"spec-generated","payload":{"acceptanceCriteriaCount":1,"referencesCount":0},"id":"EVT-A2UAFV","timestamp":"2026-04-03T08:37:44.971Z"}
+{"taskId":"TASK-20260403-0OSU","attemptId":"ATTEMPT-20260403-Y1XF","type":"attempt-started","payload":{"attemptNumber":1,"workspacePath":"E:/即梦内容工厂"},"id":"EVT-QN6ROG","timestamp":"2026-04-03T08:37:45.095Z"}
+{"taskId":"TASK-20260403-0OSU","attemptId":"ATTEMPT-20260403-Y1XF","type":"escalated","payload":{"issues":["Codex exclusive lock: 3 codex.exe process(es) already running. Kill existing sessions before dispatching new tasks to prevent cross-project contamination.","Static checks were skipped because execution did not complete successfully."]},"id":"EVT-8YO659","timestamp":"2026-04-03T08:37:45.097Z"}
