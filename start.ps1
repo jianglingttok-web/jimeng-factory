@@ -69,18 +69,24 @@ if (Test-Port 8001) {
         -WorkingDirectory $ROOT -WindowStyle Normal
 }
 
-# 3. Vite 前端
-if (Test-Port 5173) {
-    Write-Host "Vite 前端已在运行 (port 5173)，跳过。"
+# 3. 前端：有 dist 走生产模式（FastAPI 直接 serve），否则 fallback Vite 开发模式
+if (Test-Path "$ROOT\frontend\dist\index.html") {
+    $OPEN_URL = "http://localhost:8001"
+    Write-Host "前端使用生产模式（FastAPI 直接提供静态文件）"
 } else {
-    Write-Host "启动 Vite 前端 (port 5173)..."
-    Start-Process cmd -ArgumentList "/k npm run dev" `
-        -WorkingDirectory "$ROOT\frontend" -WindowStyle Normal
+    $OPEN_URL = "http://localhost:5173"
+    if (Test-Port 5173) {
+        Write-Host "Vite 前端已在运行 (port 5173)，跳过。"
+    } else {
+        Write-Host "启动 Vite 前端 (port 5173)..."
+        Start-Process cmd -ArgumentList "/k npm run dev" `
+            -WorkingDirectory "$ROOT\frontend" -WindowStyle Normal
+    }
 }
 
 # 等待服务就绪后打开浏览器
 Start-Sleep -Seconds 3
-Write-Host "打开 http://localhost:5173 ..."
-Start-Process "http://localhost:5173"
+Write-Host "打开 $OPEN_URL ..."
+Start-Process $OPEN_URL
 
 Write-Host "所有服务已启动。"

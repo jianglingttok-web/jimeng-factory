@@ -25,20 +25,24 @@ Write-Host "`n[3/5] 安装 Playwright Chromium..." -ForegroundColor Yellow
 python -m playwright install chromium
 Write-Host "  完成" -ForegroundColor Green
 
-# 4. 检查 Node.js 并安装前端依赖 + 编译
-Write-Host "`n[4/5] 安装前端依赖并编译..." -ForegroundColor Yellow
-$node = Get-Command node -ErrorAction SilentlyContinue
-if (-not $node) {
-    Write-Host "  错误：未找到 Node.js，请先安装 Node.js 18+" -ForegroundColor Red
-    exit 1
+# 4. 前端编译（已有 dist 则跳过）
+Write-Host "`n[4/5] 检查前端..." -ForegroundColor Yellow
+if (Test-Path "$ROOT\frontend\dist\index.html") {
+    Write-Host "  前端已编译，跳过" -ForegroundColor Green
+} else {
+    $node = Get-Command node -ErrorAction SilentlyContinue
+    if (-not $node) {
+        Write-Host "  错误：未找到 Node.js，请先安装 Node.js 18+" -ForegroundColor Red
+        exit 1
+    }
+    $nodeVer = node --version 2>&1
+    Write-Host "  Node $nodeVer"
+    Push-Location "$ROOT\frontend"
+    npm install --quiet
+    npm run build
+    Pop-Location
+    Write-Host "  完成" -ForegroundColor Green
 }
-$nodeVer = node --version 2>&1
-Write-Host "  Node $nodeVer"
-Push-Location "$ROOT\frontend"
-npm install --quiet
-npm run build
-Pop-Location
-Write-Host "  完成" -ForegroundColor Green
 
 # 5. 创建 config.yaml（如果不存在）
 Write-Host "`n[5/5] 检查配置文件..." -ForegroundColor Yellow

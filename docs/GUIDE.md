@@ -4,7 +4,6 @@
 
 - Windows 10/11
 - Python 3.10+（推荐 3.12+）
-- Node.js 18+（推荐 20+）
 - 多空间浏览器（mul-key-chrome）
 
 ## 快速安装
@@ -12,7 +11,6 @@
 ### 1. 安装前置软件
 
 - Python: https://python.org/downloads/ （安装时勾选 "Add to PATH"）
-- Node.js: https://nodejs.org/ （LTS 版本）
 - 多空间浏览器: 联系技术获取安装包
 
 ### 2. 运行安装脚本
@@ -41,10 +39,9 @@
 
 - 多空间浏览器（如未运行）
 - 后端服务（端口 8001）
-- 前端页面（端口 5173，开发模式）
-- 自动打开浏览器
+- 自动打开浏览器 `http://localhost:8001`
 
-生产模式（单进程）访问 `http://localhost:8001`
+前端已预编译，无需额外安装 Node.js 开发环境。
 
 ## 日常使用
 

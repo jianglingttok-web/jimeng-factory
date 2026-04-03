@@ -43,6 +43,8 @@
 
 无
 
+- Phase 7 Slice 3: build-release.ps1 + production-first 启动 + 排除收紧 (2026-04-03)
+
 ## 下一个切片
 
-**Phase 7 Slice 3**: ZIP 打包脚本 — build-release.ps1，排除开发目录，输出可分发压缩包
+**Phase 7 Slice 4**: Codex 验证打包结果 → 分发

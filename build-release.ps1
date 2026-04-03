@@ -19,17 +19,23 @@ $EXCLUDE_DIRS = @(
     ".git",
     ".claude",
     ".tmp_validation",
+    ".agentbridge",
     "runs",
     "runtime",
     "outputs",
     "node_modules",
     "frontend\node_modules",
+    "frontend\src",
+    "docs\handoffs",
+    "__pycache__",
     ".release-staging"
 )
 
 $EXCLUDE_FILES = @(
     "config.yaml",
-    "*.zip"
+    "build-release.ps1",
+    "*.zip",
+    "*.pyc"
 )
 
 # 1. 检查 frontend/dist 是否存在
@@ -57,12 +63,16 @@ if ($LASTEXITCODE -ge 8) {
     exit 1
 }
 
-# 3. 清理暂存目录中不需要的内容
-# 删除前端源码中的 node_modules（如果被复制进来）
+# 3. 清理暂存目录中的开发残留
+# __pycache__ 可能嵌套在子目录
+Get-ChildItem -Path $TEMP_DIR -Directory -Recurse -Filter "__pycache__" | Remove-Item -Recurse -Force
+# .pyc 文件
+Get-ChildItem -Path $TEMP_DIR -File -Recurse -Filter "*.pyc" | Remove-Item -Force
+# node_modules（如果被复制进来）
 if (Test-Path "$TEMP_DIR\frontend\node_modules") {
     Remove-Item "$TEMP_DIR\frontend\node_modules" -Recurse -Force
 }
-# 删除 data/products 中的示例数据
+# 示例产品数据
 if (Test-Path "$TEMP_DIR\data\products") {
     Remove-Item "$TEMP_DIR\data\products\*" -Recurse -Force -ErrorAction SilentlyContinue
 }
@@ -89,6 +99,6 @@ Write-Host "文件: $OUT_ZIP" -ForegroundColor Green
 Write-Host "大小: ${size} MB" -ForegroundColor Green
 Write-Host "`n分发给运营后，告知：" -ForegroundColor White
 Write-Host "  1. 解压到任意目录"
-Write-Host "  2. 右键 setup.ps1 → 使用 PowerShell 运行"
+Write-Host "  2. 双击 setup.bat 安装依赖"
 Write-Host "  3. 编辑 config.yaml 中的多空间浏览器路径"
 Write-Host "  4. 双击 start.bat"
