@@ -180,13 +180,13 @@ class JimengProvider:
             session = await self._open_session(account=account, reuse_existing_page=True)
             page = await self._ensure_work_page(session, account, "generate", timeout_ms)
             await self._prepare_submission_page(page, account=account)
-            if duration_seconds is not None:
-                dur_text = f"{duration_seconds}s"
-                with contextlib.suppress(Exception):
-                    await self._select_toolbar_combobox_value(page, 3, dur_text)
-                    logger.info("Duration overridden to %s for this task.", dur_text)
             await self._upload_images(page, resolved_images)
             await self._fill_prompt(page, prompt)
+            # Set duration as the LAST step before generate — after all other
+            # preparation that might reset toolbar values (e.g. _upload_images
+            # may call _apply_toolbar_defaults for multi-image layout).
+            final_duration = duration_seconds or self.config.video.default_duration_seconds
+            await self._enforce_final_duration(page, final_duration)
             await self._wait_for_available_generation_slot(
                 page=page,
                 target_limit=self._effective_max_concurrent(account),
@@ -959,6 +959,21 @@ class JimengProvider:
         await self._ensure_control_value(page, reference, [reference, "\u81ea\u52a8", "\u7075\u611f\u641c\u7d22", "\u521b\u610f\u8bbe\u8ba1", "\u53c2\u8003"])
         await self._ensure_control_value(page, aspect, [aspect, "\u6bd4\u4f8b"])
         await self._ensure_control_value(page, duration, [duration, "\u65f6\u957f"])
+
+    async def _enforce_final_duration(self, page: Page, duration_seconds: int) -> None:
+        """Set duration as the very last toolbar action before clicking generate.
+        Always explicit — prevents state leaking between tasks on sticky pages."""
+        dur_text = f"{duration_seconds}s"
+        # Try combobox index first
+        with contextlib.suppress(Exception):
+            count = await self._toolbar_combobox_count(page)
+            if count >= 4:
+                await self._select_toolbar_combobox_value(page, 3, dur_text)
+                logger.info("Final duration set to %s via combobox.", dur_text)
+                return
+        # Fallback to text-based enforcement
+        await self._ensure_control_value(page, dur_text, [dur_text, "\u65f6\u957f"])
+        logger.info("Final duration set to %s via text enforcement.", dur_text)
 
     async def _wait_for_toolbar_ready(self, page: Page) -> None:
         deadline = time.monotonic() + 20
