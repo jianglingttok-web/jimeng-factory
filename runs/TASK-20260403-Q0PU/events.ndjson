@@ -1,0 +1,4 @@
+{"taskId":"TASK-20260403-Q0PU","type":"task-created","payload":{"requester":"tred","priority":"medium"},"id":"EVT-MQLXLB","timestamp":"2026-04-03T09:43:57.081Z"}
+{"taskId":"TASK-20260403-Q0PU","type":"spec-generated","payload":{"acceptanceCriteriaCount":1,"referencesCount":0},"id":"EVT-1IS234","timestamp":"2026-04-03T09:43:57.082Z"}
+{"taskId":"TASK-20260403-Q0PU","attemptId":"ATTEMPT-20260403-ZIGI","type":"attempt-started","payload":{"attemptNumber":1,"workspacePath":"E:/jimeng-factory"},"id":"EVT-RFG8FD","timestamp":"2026-04-03T09:44:20.070Z"}
+{"taskId":"TASK-20260403-Q0PU","attemptId":"ATTEMPT-20260403-ZIGI","type":"escalated","payload":{"issues":["codex exec exited with code 1.","Static checks were skipped because execution did not complete successfully."]},"id":"EVT-0CJVE9","timestamp":"2026-04-03T09:44:20.074Z"}
