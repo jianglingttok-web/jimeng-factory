@@ -81,9 +81,25 @@ if (Test-Path "$ROOT\frontend\dist\index.html") {
     }
 }
 
-# 等待服务就绪后打开浏览器
-Start-Sleep -Seconds 3
-Write-Host "打开 $OPEN_URL ..."
-Start-Process $OPEN_URL
+# 等待 FastAPI 就绪
+Write-Host "等待 FastAPI 启动..." -NoNewline
+$ready = $false
+for ($i = 0; $i -lt 10; $i++) {
+    Start-Sleep -Seconds 1
+    Write-Host "." -NoNewline
+    if (Test-Port 8001) { $ready = $true; break }
+}
+Write-Host ""
 
-Write-Host "所有服务已启动。"
+if ($ready) {
+    Write-Host "打开 $OPEN_URL ..."
+    Start-Process $OPEN_URL
+    Write-Host "所有服务已启动。"
+} else {
+    Write-Host "警告：FastAPI 未能在 10 秒内启动" -ForegroundColor Red
+    Write-Host "  可能原因：" -ForegroundColor Yellow
+    Write-Host "  1. 未运行 setup.bat 安装依赖" -ForegroundColor Yellow
+    Write-Host "  2. 查看 FastAPI 窗口的错误信息" -ForegroundColor Yellow
+    Write-Host "  手动测试: python -m uvicorn src.web.app:app --host 0.0.0.0 --port 8001" -ForegroundColor Yellow
+    Read-Host "按回车键退出"
+}
