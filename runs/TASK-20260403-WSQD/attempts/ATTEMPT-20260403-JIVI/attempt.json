@@ -1,0 +1,10 @@
+{
+  "id": "ATTEMPT-20260403-JIVI",
+  "taskId": "TASK-20260403-WSQD",
+  "attemptNumber": 1,
+  "startedAt": "2026-04-03T12:35:11.094Z",
+  "status": "escalated",
+  "workspacePath": "E:/jimeng-factory",
+  "outputPath": "E:\\jimeng-factory\\runs\\TASK-20260403-WSQD\\attempts\\ATTEMPT-20260403-JIVI\\artifacts",
+  "finishedAt": "2026-04-03T12:35:37.842Z"
+}
