@@ -17,13 +17,7 @@
 
 ### 2. 运行安装脚本
 
-右键 `setup.ps1` → “使用 PowerShell 运行”
-
-或在命令行执行：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File setup.ps1
-```
+双击 `setup.bat`
 
 脚本会自动：
 
@@ -92,7 +86,7 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 ### Q: 启动后提示 “config.yaml 不存在”
 
-运行 `setup.ps1` 安装脚本。
+双击 `setup.bat` 运行安装脚本。
 
 ### Q: 任务全部失败，错误 “BrowserType.connect_over_cdp”
 
@@ -118,9 +112,10 @@ Harvester 每 10 秒检查一次。如果长时间不动：
 
 ```text
 即梦内容工厂/
+├── setup.bat           ← 双击安装（只需一次）
 ├── start.bat           ← 双击启动
+├── setup.ps1           ← 安装脚本（实际逻辑）
 ├── start.ps1           ← 启动脚本（实际逻辑）
-├── setup.ps1           ← 一次性安装脚本
 ├── config.yaml         ← 本地配置（不入库）
 ├── config.yaml.example ← 配置模板
 ├── requirements.txt    ← Python 依赖
