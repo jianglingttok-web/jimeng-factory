@@ -20,6 +20,7 @@ class SubmitRequest(BaseModel):
     account_name: str
     count: int
     variant_ids: list[str] | None = None
+    duration_seconds: int | None = None
 
 
 class VariantInput(BaseModel):
@@ -177,6 +178,7 @@ async def submit_tasks(body: SubmitRequest, request: Request) -> dict[str, Any]:
             variant_id=variant["id"],
             prompt=variant["prompt"],
             account_name=body.account_name,
+            duration_seconds=body.duration_seconds,
         )
         storage.create_task(task)
         created.append(task.task_id)

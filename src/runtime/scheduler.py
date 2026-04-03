@@ -80,6 +80,7 @@ class Scheduler:
                         account=acct_cfg,
                         prompt=task.prompt,
                         image_paths=image_paths,
+                        duration_seconds=task.duration_seconds,
                     )
                 except asyncio.CancelledError:
                     self.storage.mark_submit_failed(

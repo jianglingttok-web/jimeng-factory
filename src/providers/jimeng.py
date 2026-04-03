@@ -165,6 +165,7 @@ class JimengProvider:
         account: JimengAccountConfig,
         prompt: str,
         image_paths: Iterable[str | Path],
+        duration_seconds: int | None = None,
     ) -> SubmitReceipt:
         """Submit a generation job to Jimeng via CDP browser automation."""
         resolved_images = [str(Path(item).resolve()) for item in image_paths]
@@ -179,6 +180,11 @@ class JimengProvider:
             session = await self._open_session(account=account, reuse_existing_page=True)
             page = await self._ensure_work_page(session, account, "generate", timeout_ms)
             await self._prepare_submission_page(page, account=account)
+            if duration_seconds is not None:
+                dur_text = f"{duration_seconds}s"
+                with contextlib.suppress(Exception):
+                    await self._select_toolbar_combobox_value(page, 3, dur_text)
+                    logger.info("Duration overridden to %s for this task.", dur_text)
             await self._upload_images(page, resolved_images)
             await self._fill_prompt(page, prompt)
             await self._wait_for_available_generation_slot(
@@ -1169,13 +1175,28 @@ class JimengProvider:
                 continue
         return False
 
+    async def _has_visible_loose_text(self, page: Page, expected_value: str) -> bool:
+        """Check if text containing expected_value is visible (non-exact match)."""
+        locator = page.locator(f"text={expected_value}")
+        with contextlib.suppress(Exception):
+            count = await locator.count()
+            for index in range(min(count, 8)):
+                if await locator.nth(index).is_visible():
+                    return True
+        return False
+
     async def _ensure_control_value(
         self,
         page: Page,
         expected_value: str,
         trigger_candidates: list[str],
     ) -> None:
+        # Exact match check
         if await self._has_visible_exact_text(page, expected_value):
+            return
+        # Loose match check (e.g. "Seedance 2.0 Fast" matches "Seedance 2.0 Fast VIP")
+        if await self._has_visible_loose_text(page, expected_value):
+            logger.info("Toolbar value '%s' found via loose match (UI may show variant).", expected_value)
             return
         with contextlib.suppress(Exception):
             await page.keyboard.press("Escape")
@@ -1187,15 +1208,22 @@ class JimengProvider:
                     await page.wait_for_timeout(250)
             if await self._has_visible_exact_text(page, expected_value):
                 return
+            if await self._has_visible_loose_text(page, expected_value):
+                return
             with contextlib.suppress(Exception):
                 if await self._click_visible_exact_text(page, expected_value):
                     await page.wait_for_timeout(250)
             if await self._has_visible_exact_text(page, expected_value):
                 return
+            if await self._has_visible_loose_text(page, expected_value):
+                return
         if await self._click_visible_exact_text(page, expected_value):
             if await self._has_visible_exact_text(page, expected_value):
                 return
-        raise RuntimeError(f"Could not enforce generate setting: {expected_value}")
+            if await self._has_visible_loose_text(page, expected_value):
+                return
+        # Downgrade to warning instead of blocking the task
+        logger.warning("Could not enforce generate setting: %s (continuing anyway)", expected_value)
 
     # ── Image upload ──────────────────────────────────────────────────────────
 

@@ -25,6 +25,13 @@
           </option>
         </select>
 
+        <label>视频时长</label>
+        <select v-model.number="form.duration_seconds">
+          <option :value="null">默认 ({{ defaultDuration }}s)</option>
+          <option :value="5">5 秒</option>
+          <option :value="10">10 秒</option>
+        </select>
+
         <label>数量</label>
         <input type="number" v-model.number="form.count" min="1" max="100" required />
 
@@ -48,10 +55,13 @@ const loading = ref(false)
 const result = ref(null)
 const error = ref('')
 
+const defaultDuration = 10
+
 const form = ref({
   product_name: '',
   account_name: '',
   count: 5,
+  duration_seconds: null,
 })
 
 async function submit() {
