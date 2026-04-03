@@ -5,14 +5,17 @@ $env:NO_PROXY = "127.0.0.1,localhost"
 
 Write-Host "=== 即梦内容工厂 — 环境安装 ===" -ForegroundColor Cyan
 
-# 1. 检查 Python
+# 1. 检查 Python（排除 Windows Store 占位符）
 Write-Host "`n[1/5] 检查 Python..." -ForegroundColor Yellow
-$py = Get-Command python -ErrorAction SilentlyContinue
-if (-not $py) {
-    Write-Host "  错误：未找到 Python，请先安装 Python 3.10+" -ForegroundColor Red
+$pyVer = (python --version 2>&1) | Out-String
+$pyVer = $pyVer.Trim()
+if (-not $pyVer -or $pyVer -notmatch '^Python \d') {
+    Write-Host "  错误：未找到 Python（或仅有 Windows Store 占位符）" -ForegroundColor Red
+    Write-Host "  请从 https://python.org/downloads/ 安装 Python 3.10+" -ForegroundColor Yellow
+    Write-Host "  安装时务必勾选 'Add Python to PATH'" -ForegroundColor Yellow
+    Read-Host "按回车键退出"
     exit 1
 }
-$pyVer = python --version 2>&1
 Write-Host "  $pyVer" -ForegroundColor Green
 
 # 2. 安装 Python 依赖
