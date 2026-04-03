@@ -5,6 +5,19 @@ $BROWSER_EXE = "E:\多空间浏览器\mul-key-chrome\多空间浏览器.exe"
 $CDP_PORT = 9222
 $env:NO_PROXY = "127.0.0.1,localhost"
 
+# 前置检查：config.yaml 是否存在
+if (-not (Test-Path "$ROOT\config.yaml")) {
+    Write-Host "错误：config.yaml 不存在。请先运行 setup.ps1" -ForegroundColor Red
+    Write-Host "  powershell -ExecutionPolicy Bypass -File `"$ROOT\setup.ps1`""
+    Read-Host "按回车键退出"
+    exit 1
+}
+
+# 前置检查：frontend/dist 是否存在
+if (-not (Test-Path "$ROOT\frontend\dist\index.html")) {
+    Write-Host "警告：前端未编译，将以开发模式运行（需要 Vite）" -ForegroundColor Yellow
+}
+
 function Test-Port($port) {
     try {
         $conn = [System.Net.Sockets.TcpClient]::new()
