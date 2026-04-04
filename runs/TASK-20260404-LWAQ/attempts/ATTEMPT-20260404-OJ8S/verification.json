@@ -1,0 +1,38 @@
+{
+  "attemptId": "ATTEMPT-20260404-OJ8S",
+  "executionCheck": {
+    "runner": "codex-exec",
+    "availability": "degraded",
+    "passed": false,
+    "issues": [
+      "codex exec exited with code 1."
+    ],
+    "exitCode": 1,
+    "failedToStart": false,
+    "sessionId": "019d5751-b777-7932-8f0c-ee818112b4ac"
+  },
+  "staticCheck": {
+    "passed": false,
+    "issues": [
+      "Static checks were skipped because execution did not complete successfully."
+    ]
+  },
+  "runtimeCheck": {
+    "passed": false,
+    "issues": []
+  },
+  "semanticCheck": {
+    "verdict": "not-evaluated",
+    "criteria": []
+  },
+  "qualification": {
+    "verdict": "unqualified",
+    "issues": [
+      {
+        "code": "runner-failed",
+        "message": "codex exec exited with code 1."
+      }
+    ]
+  },
+  "hasRetryableFailures": true
+}
