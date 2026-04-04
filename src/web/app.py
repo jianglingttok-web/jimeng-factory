@@ -93,6 +93,11 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        datefmt="%H:%M:%S",
+    )
     config = load_config(Path("config.yaml"))
     app = FastAPI(title="即梦内容工厂", lifespan=lifespan)
     app.add_middleware(
