@@ -1058,7 +1058,19 @@ class JimengProvider:
                 await page.wait_for_timeout(250)
                 continue
 
-            await page.wait_for_timeout(350)
+            # Wait longer then verify — platform may auto-switch after a delay
+            # (e.g. Jimeng promotes VIP model ~500-1000ms after selecting Fast)
+            await page.wait_for_timeout(1200)
+            current_value = await self._read_combobox_value(combo)
+            if self._combobox_value_matches(expected_value, current_value):
+                return
+
+            # Platform switched away — re-select immediately
+            logger.info("Platform auto-switched from '%s' to '%s', re-selecting...", expected_value, current_value)
+            await combo.click()
+            await page.wait_for_timeout(600)
+            await self._click_toolbar_option(page, expected_value)
+            await page.wait_for_timeout(1200)
             current_value = await self._read_combobox_value(combo)
             if self._combobox_value_matches(expected_value, current_value):
                 return
