@@ -145,6 +145,14 @@ class JimengProvider:
         self.provider_config = config.providers.jimeng
         self._sticky_generate_pages: dict[str, Page] = {}
         self._configured_generate_pages: dict[str, int] = {}
+        self._account_locks: dict[str, asyncio.Lock] = {}
+
+    def _account_lock(self, account_name: str) -> asyncio.Lock:
+        """Per-account lock to prevent scheduler and harvester from
+        using the same browser page simultaneously."""
+        if account_name not in self._account_locks:
+            self._account_locks[account_name] = asyncio.Lock()
+        return self._account_locks[account_name]
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -175,6 +183,8 @@ class JimengProvider:
 
         timeout_ms = self.config.video.task_timeout_seconds * 1000
 
+        lock = self._account_lock(account.name)
+        await lock.acquire()
         session: SessionHandle | None = None
         try:
             session = await self._open_session(account=account, reuse_existing_page=True)
@@ -207,6 +217,7 @@ class JimengProvider:
         finally:
             if session is not None:
                 await self._close_session(session)
+            lock.release()
 
     def _pick_transcoded_video_url(self, transcoded: Any) -> Optional[str]:
         if not isinstance(transcoded, dict):
@@ -272,6 +283,8 @@ class JimengProvider:
     ) -> list[RemoteResult]:
         """Poll the Jimeng generate page for videos completed after since_ts."""
         timeout_ms = self.config.video.task_timeout_seconds * 1000
+        lock = self._account_lock(account.name)
+        await lock.acquire()
         session: SessionHandle | None = None
         page: Optional[Page] = None
         captured_responses: list[Any] = []
@@ -314,8 +327,12 @@ class JimengProvider:
             if page is not None:
                 with contextlib.suppress(Exception):
                     page.remove_listener("response", capture_response)
+            # page.reload() destroys toolbar state on the sticky page; force the
+            # next submit to rebuild defaults instead of trusting cached config.
+            self._forget_sticky_generate_page(account)
             if session is not None:
                 await self._close_session(session)
+            lock.release()
 
     async def download_video(
         self,
