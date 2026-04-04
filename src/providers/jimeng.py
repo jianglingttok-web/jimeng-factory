@@ -935,12 +935,15 @@ class JimengProvider:
         await self._wait_for_toolbar_ready(page)
         count = await self._toolbar_combobox_count(page)
         if count >= 4:
+            # Order matters: reference BEFORE model.
+            # 全能参考 auto-switches model to VIP; setting model last overrides it.
             with contextlib.suppress(Exception):
                 await self._select_toolbar_combobox_value(page, 0, mode)
             with contextlib.suppress(Exception):
-                await self._select_toolbar_combobox_value(page, 1, model)
-            with contextlib.suppress(Exception):
                 await self._select_toolbar_combobox_value(page, 2, reference)
+            await page.wait_for_timeout(500)  # let platform auto-switch settle
+            with contextlib.suppress(Exception):
+                await self._select_toolbar_combobox_value(page, 1, model)
             with contextlib.suppress(Exception):
                 await self._set_aspect_ratio(page, aspect)
             with contextlib.suppress(Exception):
@@ -954,9 +957,10 @@ class JimengProvider:
 
     async def _enforce_standard_generate_defaults(self, page: Page) -> None:
         mode, model, reference, aspect, duration = self._toolbar_desired_values()
+        # Order: mode → reference → model (model last to override VIP auto-switch)
         await self._ensure_control_value(page, mode, [mode, "Agent \u6a21\u5f0f", "\u521b\u4f5c\u6a21\u5f0f"])
-        await self._ensure_control_value(page, model, [model, "Seedance \u89c6\u9891\u521b\u4f5c", "Seedance"])
         await self._ensure_control_value(page, reference, [reference, "\u81ea\u52a8", "\u7075\u611f\u641c\u7d22", "\u521b\u610f\u8bbe\u8ba1", "\u53c2\u8003"])
+        await self._ensure_control_value(page, model, [model, "Seedance \u89c6\u9891\u521b\u4f5c", "Seedance"])
         await self._ensure_control_value(page, aspect, [aspect, "\u6bd4\u4f8b"])
         await self._ensure_control_value(page, duration, [duration, "\u65f6\u957f"])
 
