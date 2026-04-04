@@ -1,0 +1,38 @@
+{
+  "attemptId": "ATTEMPT-20260404-TSEN",
+  "executionCheck": {
+    "runner": "codex-exec",
+    "availability": "degraded",
+    "passed": false,
+    "issues": [
+      "codex exec exited with code 1."
+    ],
+    "exitCode": 1,
+    "failedToStart": false,
+    "sessionId": "019d57f8-5e12-7621-8eb4-b08f4620b86e"
+  },
+  "staticCheck": {
+    "passed": false,
+    "issues": [
+      "Static checks were skipped because execution did not complete successfully."
+    ]
+  },
+  "runtimeCheck": {
+    "passed": false,
+    "issues": []
+  },
+  "semanticCheck": {
+    "verdict": "not-evaluated",
+    "criteria": []
+  },
+  "qualification": {
+    "verdict": "unqualified",
+    "issues": [
+      {
+        "code": "runner-failed",
+        "message": "codex exec exited with code 1."
+      }
+    ]
+  },
+  "hasRetryableFailures": true
+}

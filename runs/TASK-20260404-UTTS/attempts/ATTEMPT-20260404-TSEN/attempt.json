@@ -1,0 +1,10 @@
+{
+  "id": "ATTEMPT-20260404-TSEN",
+  "taskId": "TASK-20260404-UTTS",
+  "attemptNumber": 1,
+  "startedAt": "2026-04-04T10:09:47.827Z",
+  "status": "escalated",
+  "workspacePath": "E:/jimeng-factory",
+  "outputPath": "E:\\jimeng-factory\\runs\\TASK-20260404-UTTS\\attempts\\ATTEMPT-20260404-TSEN\\artifacts",
+  "finishedAt": "2026-04-04T10:10:13.051Z"
+}
