@@ -963,8 +963,8 @@ class JimengProvider:
                 await self._select_toolbar_combobox_value(page, 1, model)
             with contextlib.suppress(Exception):
                 await self._set_aspect_ratio(page, aspect)
-            with contextlib.suppress(Exception):
-                await self._select_toolbar_combobox_value(page, 3, duration)
+            # Duration is NOT set here — _enforce_final_duration handles it
+            # per-task right before clicking generate.
         else:
             logger.info(
                 "Toolbar has %d comboboxes (< 4); switching to text-based enforcement.", count
@@ -979,7 +979,7 @@ class JimengProvider:
         await self._ensure_control_value(page, reference, [reference, "\u81ea\u52a8", "\u7075\u611f\u641c\u7d22", "\u521b\u610f\u8bbe\u8ba1", "\u53c2\u8003"])
         await self._ensure_control_value(page, model, [model, "Seedance \u89c6\u9891\u521b\u4f5c", "Seedance"])
         await self._ensure_control_value(page, aspect, [aspect, "\u6bd4\u4f8b"])
-        await self._ensure_control_value(page, duration, [duration, "\u65f6\u957f"])
+        # Duration skipped — handled by _enforce_final_duration per-task.
 
     async def _enforce_final_duration(self, page: Page, duration_seconds: int) -> None:
         """Set duration as the very last toolbar action before clicking generate.
