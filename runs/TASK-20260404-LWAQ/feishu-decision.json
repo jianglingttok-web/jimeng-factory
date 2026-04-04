@@ -1,0 +1,8 @@
+{
+  "taskId": "TASK-20260404-LWAQ",
+  "decision": "retry",
+  "source": "feishu-text",
+  "operator": "ou_0c5b0c6c802352985c0b33430b72819c",
+  "instruction": "修复 给出解决方案",
+  "timestamp": "2026-04-04T07:07:42.725Z"
+}
