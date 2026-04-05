@@ -69,7 +69,16 @@ async def lifespan(app: FastAPI):
     ensure_admin_user(user_store)
 
     if not config.auth.secret_key:
-        config.auth.secret_key = os.environ.get("JIMENG_SECRET_KEY") or secrets.token_hex(32)
+        env_key = os.environ.get("JIMENG_SECRET_KEY")
+        if env_key:
+            config.auth.secret_key = env_key
+        else:
+            config.auth.secret_key = secrets.token_hex(32)
+            logger.warning(
+                "JIMENG_SECRET_KEY not set — using ephemeral key. "
+                "All tokens will be invalidated on next restart. "
+                "Set JIMENG_SECRET_KEY in environment to persist sessions."
+            )
 
     app.state.user_store = user_store
 
