@@ -65,11 +65,18 @@ class ProvidersConfig(BaseModel):
     jimeng: JimengProviderConfig
 
 
+class AuthConfig(BaseModel):
+    secret_key: str = ""  # 留空则运行时从环境变量 JIMENG_SECRET_KEY 读取或自动生成
+    token_expire_minutes: int = 480  # 8小时
+    algorithm: str = "HS256"
+
+
 class AppConfig(BaseModel):
     web: WebConfig = Field(default_factory=WebConfig)
     paths: PathsConfig = Field(default_factory=PathsConfig)
     video: VideoConfig = Field(default_factory=VideoConfig)
     providers: ProvidersConfig
+    auth: AuthConfig = Field(default_factory=AuthConfig)
 
     def resolve_path(self, value: str, config_path: str | Path | None = None) -> Path:
         expanded = Path(os.path.expandvars(value))

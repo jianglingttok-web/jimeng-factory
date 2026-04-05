@@ -40,3 +40,8 @@ providers:
     web_port: 3000
     default_concurrency: 10           # 即梦系统限制：每账号最多10个并发生成
     accounts: []                      # 留空则从 spaces.json 自动发现
+
+auth:
+  secret_key: ""          # 留空则首次启动自动生成
+  token_expire_minutes: 480
+  algorithm: "HS256"
