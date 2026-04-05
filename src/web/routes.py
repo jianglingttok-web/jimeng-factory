@@ -5,10 +5,12 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from src.models.task import Task, TaskStatus
+from src.models.user import User
+from src.web.dependencies import get_current_user, require_admin
 
 router = APIRouter(prefix="/api")
 
@@ -36,13 +38,13 @@ class CreateProductRequest(BaseModel):
 # ── Products ──────────────────────────────────────────────────────────────────
 
 @router.get("/products")
-async def list_products(request: Request) -> list[dict[str, Any]]:
+async def list_products(request: Request, current_user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
     from src.runtime.product_store import list_products as _list
     return _list(request.app.state.config.paths.data_dir)
 
 
 @router.get("/products/{name}")
-async def get_product(name: str, request: Request) -> dict[str, Any]:
+async def get_product(name: str, request: Request, current_user: User = Depends(get_current_user)) -> dict[str, Any]:
     from src.runtime.product_store import get_product as _get
     try:
         return _get(request.app.state.config.paths.data_dir, name)
@@ -51,7 +53,7 @@ async def get_product(name: str, request: Request) -> dict[str, Any]:
 
 
 @router.post("/products")
-async def create_product(body: CreateProductRequest, request: Request) -> dict[str, Any]:
+async def create_product(body: CreateProductRequest, request: Request, current_user: User = Depends(get_current_user)) -> dict[str, Any]:
     from src.runtime.product_store import create_product as _create
     from src.models.product import PromptVariant
     data_dir = request.app.state.config.paths.data_dir
@@ -66,7 +68,7 @@ async def create_product(body: CreateProductRequest, request: Request) -> dict[s
 
 
 @router.put("/products/{name}")
-async def update_product_route(name: str, request: Request) -> dict[str, Any]:
+async def update_product_route(name: str, request: Request, current_user: User = Depends(get_current_user)) -> dict[str, Any]:
     from src.runtime.product_store import update_product as _update
 
     body = await request.json()
@@ -83,6 +85,7 @@ async def upload_product_images(
     name: str,
     request: Request,
     files: list[UploadFile] = File(...),
+    current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Upload images to a product directory."""
     from src.runtime.product_store import get_product as _get, _write_product_file
@@ -120,7 +123,7 @@ async def upload_product_images(
 
 
 @router.delete("/products/{name}")
-async def delete_product(name: str, request: Request) -> dict[str, Any]:
+async def delete_product(name: str, request: Request, current_user: User = Depends(require_admin)) -> dict[str, Any]:
     data_dir = Path(request.app.state.config.paths.data_dir)
     product_dir = data_dir / name
     if not product_dir.exists():
@@ -137,6 +140,7 @@ async def list_tasks(
     status: str | None = None,
     product_name: str | None = None,
     account_name: str | None = None,
+    current_user: User = Depends(get_current_user),
 ) -> list[dict[str, Any]]:
     storage = request.app.state.storage
     task_status = TaskStatus(status) if status else None
@@ -149,7 +153,7 @@ async def list_tasks(
 
 
 @router.post("/tasks/submit")
-async def submit_tasks(body: SubmitRequest, request: Request) -> dict[str, Any]:
+async def submit_tasks(body: SubmitRequest, request: Request, current_user: User = Depends(get_current_user)) -> dict[str, Any]:
     from src.models.task import Task
     from src.runtime.product_store import get_product as _get
 
@@ -187,7 +191,7 @@ async def submit_tasks(body: SubmitRequest, request: Request) -> dict[str, Any]:
 
 
 @router.post("/tasks/retry-failed")
-async def retry_failed_tasks(request: Request) -> dict[str, Any]:
+async def retry_failed_tasks(request: Request, current_user: User = Depends(get_current_user)) -> dict[str, Any]:
     """Reset all FAILED tasks back to PENDING so the scheduler can retry them."""
     storage = request.app.state.storage
     count = storage.reset_failed_tasks()
@@ -195,7 +199,7 @@ async def retry_failed_tasks(request: Request) -> dict[str, Any]:
 
 
 @router.post("/tasks/stop-batch")
-async def stop_tasks_batch(request: Request) -> dict[str, Any]:
+async def stop_tasks_batch(request: Request, current_user: User = Depends(get_current_user)) -> dict[str, Any]:
     body = await request.json()
     task_ids = body.get("task_ids", [])
     if not isinstance(task_ids, list):
@@ -206,7 +210,7 @@ async def stop_tasks_batch(request: Request) -> dict[str, Any]:
 
 
 @router.post("/tasks/{task_id}/stop")
-async def stop_task(task_id: str, request: Request) -> dict[str, Any]:
+async def stop_task(task_id: str, request: Request, current_user: User = Depends(get_current_user)) -> dict[str, Any]:
     storage = request.app.state.storage
     task = storage.get_task(task_id)
     if not task:
@@ -229,20 +233,20 @@ async def stop_task(task_id: str, request: Request) -> dict[str, Any]:
 # ── Accounts ──────────────────────────────────────────────────────────────────
 
 @router.get("/accounts")
-async def list_accounts(request: Request) -> list[dict[str, Any]]:
+async def list_accounts(request: Request, current_user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
     accounts = request.app.state.storage.get_accounts()
     return [a.model_dump(mode="json") for a in accounts]
 
 
 @router.post("/accounts/discover")
-async def discover_accounts(request: Request) -> dict[str, Any]:
+async def discover_accounts(request: Request, current_user: User = Depends(get_current_user)) -> dict[str, Any]:
     """Pull account list from multi-space browser API and sync to DB."""
     synced = await _do_discover(request.app.state)
     return {"synced": len(synced), "accounts": [a.model_dump(mode="json") for a in synced]}
 
 
 @router.post("/accounts/{name}/probe")
-async def probe_account(name: str, request: Request) -> dict[str, Any]:
+async def probe_account(name: str, request: Request, current_user: User = Depends(get_current_user)) -> dict[str, Any]:
     provider = request.app.state.provider
     try:
         acct_cfg = provider.get_account(name)
@@ -258,7 +262,7 @@ async def probe_account(name: str, request: Request) -> dict[str, Any]:
 # ── System status ─────────────────────────────────────────────────────────────
 
 @router.get("/status")
-async def system_status(request: Request) -> dict[str, Any]:
+async def system_status(request: Request, current_user: User = Depends(get_current_user)) -> dict[str, Any]:
     storage = request.app.state.storage
     accounts = storage.get_accounts()
 

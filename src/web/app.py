@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -9,11 +11,13 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.auth.init_admin import ensure_admin_user
 from src.config import load_config
 from src.providers.jimeng import JimengProvider
 from src.runtime.harvester import Harvester
 from src.runtime.scheduler import Scheduler
 from src.runtime.storage import Storage
+from src.runtime.user_store import UserStore
 from src.web.routes import router
 
 logger = logging.getLogger(__name__)
@@ -58,6 +62,16 @@ async def lifespan(app: FastAPI):
     storage.init_db()
     storage.rescue_stale_downloads()
     storage.rebuild_generating_counts()
+
+    # ── Auth setup ────────────────────────────────────────────────────────────
+    user_store = UserStore(config.paths.database_path)
+    user_store.init_db()
+    ensure_admin_user(user_store)
+
+    if not config.auth.secret_key:
+        config.auth.secret_key = os.environ.get("JIMENG_SECRET_KEY") or secrets.token_hex(32)
+
+    app.state.user_store = user_store
 
     provider = JimengProvider(config, config_path)
 
@@ -106,6 +120,8 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    from src.web.auth_routes import auth_router
+    app.include_router(auth_router)
     app.include_router(router)
     # Serve frontend static files in production (when dist/ exists).
     dist_dir = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
