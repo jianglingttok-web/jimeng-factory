@@ -26,7 +26,12 @@ function parseUsername() {
   const token = getToken()
   if (!token) return ''
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]))
+    const part = token.split('.')[1]
+    // base64url → base64: replace chars, add padding
+    const b64 = part.replace(/-/g, '+').replace(/_/g, '/').padEnd(
+      part.length + (4 - (part.length % 4)) % 4, '='
+    )
+    const payload = JSON.parse(atob(b64))
     return payload.sub || payload.username || payload.name || ''
   } catch {
     return ''

@@ -128,7 +128,7 @@ export function deleteProduct(name) {
 export function uploadProductImages(name, formData) {
   return request(`/api/products/${encodeURIComponent(name)}/images`, {
     method: 'POST',
-    headers: {},
+    headers: {}, // intentionally empty: let fetch set multipart/form-data boundary
     body: formData,
   })
 }
