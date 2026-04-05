@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from jose import JWTError, jwt
+from jose.exceptions import ExpiredSignatureError
+
+logger = logging.getLogger(__name__)
 
 
 def create_access_token(
-    data: dict,
+    data: dict[str, Any],
     secret_key: str,
     algorithm: str = "HS256",
     expires_delta_minutes: int = 480,
@@ -21,9 +26,11 @@ def decode_access_token(
     token: str,
     secret_key: str,
     algorithm: str = "HS256",
-) -> dict | None:
+) -> dict[str, Any] | None:
     try:
-        payload = jwt.decode(token, secret_key, algorithms=[algorithm])
-        return payload
+        return jwt.decode(token, secret_key, algorithms=[algorithm])
+    except ExpiredSignatureError:
+        return None  # 正常过期
     except JWTError:
-        return None
+        logger.warning("Invalid JWT token detected")
+        return None  # 签名异常
