@@ -33,7 +33,7 @@ class ChangePasswordRequest(BaseModel):
 class CreateUserRequest(BaseModel):
     username: str
     password: str
-    role: str = "operator"
+    role: UserRole = UserRole.operator
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -103,8 +103,6 @@ async def create_user(
     _admin: User = Depends(require_admin),
 ) -> UserPublic:
     """Create a new user (admin only)."""
-    import sqlite3
-
     user_store = request.app.state.user_store
     try:
         user = user_store.create_user(
@@ -113,10 +111,10 @@ async def create_user(
             role=body.role,
             is_active=True,
         )
-    except sqlite3.IntegrityError:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"User '{body.username}' already exists",
+            detail="Username already exists",
         )
     return UserPublic(username=user.username, role=user.role, is_active=user.is_active)
 

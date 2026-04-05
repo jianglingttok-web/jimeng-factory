@@ -103,10 +103,13 @@ async def upload_product_images(
         suffix = Path(f.filename or "").suffix.lower()
         if suffix not in allowed:
             continue
-        dest = product_dir / f.filename
+        safe_name = Path(f.filename or "").name
+        if not safe_name:
+            continue
+        dest = product_dir / safe_name
         with dest.open("wb") as out:
             shutil.copyfileobj(f.file, out)
-        saved.append(f.filename)
+        saved.append(safe_name)
 
     if saved:
         # Update product.json images list
