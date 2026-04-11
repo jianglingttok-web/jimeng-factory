@@ -146,21 +146,23 @@ class JimengProvider:
         self._sticky_generate_pages: dict[str, Page] = {}
         self._configured_generate_pages: dict[str, int] = {}
         self._account_locks: dict[str, asyncio.Lock] = {}
+        self._account_map: dict[str, JimengAccountConfig] = {
+            account.name: account for account in self.provider_config.accounts
+        }
 
     def _account_lock(self, account_name: str) -> asyncio.Lock:
         """Per-account lock to prevent scheduler and harvester from
         using the same browser page simultaneously."""
-        if account_name not in self._account_locks:
-            self._account_locks[account_name] = asyncio.Lock()
+        self._account_locks.setdefault(account_name, asyncio.Lock())
         return self._account_locks[account_name]
 
     # ── Public API ────────────────────────────────────────────────────────────
 
     def get_account(self, account_name: str) -> JimengAccountConfig:
-        for account in self.provider_config.accounts:
-            if account.name == account_name:
-                return account
-        raise ValueError(f"Unknown account: {account_name}")
+        try:
+            return self._account_map[account_name]
+        except KeyError:
+            raise ValueError(f"Unknown account: {account_name}")
 
     def _effective_cdp_url(self, account: JimengAccountConfig) -> str:
         return account.cdp_url or self.provider_config.cdp_url
@@ -213,7 +215,7 @@ class JimengProvider:
         except Exception as exc:  # noqa: BLE001
             if any(token in str(exc) for token in ("Toolbar combobox index", "Toolbar controls were not ready")):
                 self._forget_sticky_generate_page(account)
-            return SubmitReceipt(ok=False, error=f"{type(exc).__name__}: {exc}" or repr(exc))
+            return SubmitReceipt(ok=False, error=f"{type(exc).__name__}: {exc}")
         finally:
             if session is not None:
                 await self._close_session(session)
@@ -301,7 +303,7 @@ class JimengProvider:
             with contextlib.suppress(Exception):
                 await page.reload(wait_until="domcontentloaded", timeout=min(timeout_ms, 20_000))
             with contextlib.suppress(Exception):
-                await page.wait_for_timeout(3000)
+                await page.wait_for_timeout(1500)
 
             items_by_url: dict[str, RemoteResult] = {}
             for response in captured_responses:
@@ -360,7 +362,7 @@ class JimengProvider:
             return DownloadReceipt(ok=True, path=str(target))
         except Exception as exc:  # noqa: BLE001
             logger.error("Direct download failed for %s: %s", result.url, exc)
-            return DownloadReceipt(ok=False, error=f"{type(exc).__name__}: {exc}" or repr(exc))
+            return DownloadReceipt(ok=False, error=f"{type(exc).__name__}: {exc}")
 
     # ── Session management ────────────────────────────────────────────────────
 
@@ -397,6 +399,8 @@ class JimengProvider:
         if session.created_page:
             with contextlib.suppress(Exception):
                 await session.page.close()
+        with contextlib.suppress(Exception):
+            await session.browser.disconnect()
         await session.playwright.stop()
 
     async def _open_cdp_page(self, context: BrowserContext, seed_page: Optional[Page] = None) -> Page:
@@ -950,6 +954,11 @@ class JimengProvider:
     async def _apply_toolbar_defaults(self, page: Page) -> None:
         mode, model, reference, aspect, duration = self._toolbar_desired_values()
         await self._wait_for_toolbar_ready(page)
+        # Escape agent mode FIRST before counting comboboxes.
+        # If page is in 智能体/agent mode, toolbar only has 2 comboboxes and
+        # all other settings fail. Switch mode now and wait for toolbar to re-render.
+        await self._ensure_control_value(page, mode, [mode, "Agent \u6a21\u5f0f", "\u521b\u4f5c\u6a21\u5f0f", "\u667a\u80fd\u4f53"])
+        await page.wait_for_timeout(800)
         count = await self._toolbar_combobox_count(page)
         if count >= 4:
             # Order matters: reference BEFORE model.
@@ -1260,10 +1269,13 @@ class JimengProvider:
         # Exact match check
         if await self._has_visible_exact_text(page, expected_value):
             return
-        # Loose match check (e.g. "Seedance 2.0 Fast" matches "Seedance 2.0 Fast VIP")
+        # Loose match check — but reject if the visible text is a VIP upgrade of a non-VIP target.
+        # e.g. looking for "Seedance 2.0 Fast" must NOT accept "Seedance 2.0 Fast VIP".
         if await self._has_visible_loose_text(page, expected_value):
-            logger.info("Toolbar value '%s' found via loose match (UI may show variant).", expected_value)
-            return
+            vip_visible = "VIP" not in expected_value and await self._has_visible_loose_text(page, expected_value + " VIP")
+            if not vip_visible:
+                logger.info("Toolbar value '%s' found via loose match (UI may show variant).", expected_value)
+                return
         with contextlib.suppress(Exception):
             await page.keyboard.press("Escape")
             await page.wait_for_timeout(100)

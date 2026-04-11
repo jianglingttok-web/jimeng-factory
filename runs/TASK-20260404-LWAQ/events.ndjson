@@ -1,6 +1,0 @@
-{"taskId":"TASK-20260404-LWAQ","type":"task-created","payload":{"requester":"tred","priority":"medium"},"id":"EVT-32FDRY","timestamp":"2026-04-04T07:06:54.973Z"}
-{"taskId":"TASK-20260404-LWAQ","type":"spec-generated","payload":{"acceptanceCriteriaCount":1,"referencesCount":0},"id":"EVT-70MW8G","timestamp":"2026-04-04T07:06:54.974Z"}
-{"taskId":"TASK-20260404-LWAQ","attemptId":"ATTEMPT-20260404-0A39","type":"attempt-started","payload":{"attemptNumber":1,"workspacePath":"E:/jimeng-factory"},"id":"EVT-BHBFU1","timestamp":"2026-04-04T07:07:23.176Z"}
-{"taskId":"TASK-20260404-LWAQ","attemptId":"ATTEMPT-20260404-0A39","type":"escalated","payload":{"issues":["codex exec exited with code 1.","Static checks were skipped because execution did not complete successfully."]},"id":"EVT-CG21Y0","timestamp":"2026-04-04T07:07:23.189Z"}
-{"taskId":"TASK-20260404-LWAQ","attemptId":"ATTEMPT-20260404-OJ8S","type":"attempt-started","payload":{"attemptNumber":2,"workspacePath":"E:/jimeng-factory"},"id":"EVT-RUGYZ9","timestamp":"2026-04-04T07:08:11.717Z"}
-{"taskId":"TASK-20260404-LWAQ","attemptId":"ATTEMPT-20260404-OJ8S","type":"escalated","payload":{"issues":["codex exec exited with code 1.","Static checks were skipped because execution did not complete successfully."]},"id":"EVT-OLEEKI","timestamp":"2026-04-04T07:08:11.720Z"}

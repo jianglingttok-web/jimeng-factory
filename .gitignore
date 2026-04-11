@@ -23,4 +23,13 @@ Thumbs.db
 
 # Config with secrets
 config.yaml
+
+# Build artifacts
+*.zip
+
+# Runtime task runs
+/runs/
+
+# Temp / dev
+.tmp_validation/
 .worktrees/

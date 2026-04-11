@@ -1,3 +1,0 @@
-Task: TASK-20260402-1ZS8
-Attempt: ATTEMPT-20260402-N7PP
-This is a mock artifact produced by the V1 runner.

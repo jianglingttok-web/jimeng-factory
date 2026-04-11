@@ -95,5 +95,23 @@ def load_config(config_path: str | Path = 'config.yaml') -> AppConfig:
         if fallback.exists():
             path = fallback
 
-    data = yaml.safe_load(path.read_text(encoding='utf-8')) or {}
+    raw = path.read_text(encoding='utf-8')
+    try:
+        data = yaml.safe_load(raw) or {}
+    except yaml.scanner.ScannerError as exc:
+        # Common mistake: double-quoted Windows paths with single backslashes
+        # e.g. "C:\Users\..." — YAML treats \U as a unicode escape
+        if 'escape sequence' in str(exc):
+            hint = (
+                f"\n\n{'='*60}\n"
+                f"配置文件 YAML 解析失败: {path}\n\n"
+                f"最常见原因：路径使用了反斜杠 \\\n"
+                f'  错误写法: browser_executable_path: "C:\\Users\\..."\n'
+                f'  错误写法: browser_executable_path: \'C:\\Users\\...\'\n'
+                f"  正确写法: browser_executable_path: C:/Users/...\n"
+                f"           （把反斜杠 \\ 全部改成正斜杠 / 即可）\n"
+                f"{'='*60}"
+            )
+            raise SystemExit(hint) from exc
+        raise
     return AppConfig.model_validate(data)

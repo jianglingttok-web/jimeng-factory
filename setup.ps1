@@ -48,6 +48,21 @@ Write-Host "  $pyVer" -ForegroundColor Green
 
 # 2. 安装 Python 依赖
 Write-Host "`n[2/4] 安装 Python 依赖..." -ForegroundColor Yellow
+
+# 检查 pip 是否可用，不可用则尝试 bootstrap
+$pipCheck = (python -m pip --version 2>&1) | Out-String
+if ($pipCheck -notmatch 'pip') {
+    Write-Host "  pip 未安装，尝试自动 bootstrap..." -ForegroundColor Yellow
+    python -m ensurepip --upgrade 2>&1 | Out-Null
+    # ensurepip 失败时降级为下载 get-pip.py
+    $pipCheck2 = (python -m pip --version 2>&1) | Out-String
+    if ($pipCheck2 -notmatch 'pip') {
+        Write-Host "  ensurepip 失败，下载 get-pip.py..." -ForegroundColor Yellow
+        Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile "$env:TEMP\get-pip.py" -UseBasicParsing
+        python "$env:TEMP\get-pip.py" --quiet
+    }
+}
+
 python -m pip install -r "$ROOT\requirements.txt" --quiet 2>&1 | Out-Null
 # 验证关键依赖
 $uvCheck = (python -c "import uvicorn; print('ok')" 2>&1) | Out-String

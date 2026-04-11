@@ -122,7 +122,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import {
   createProduct as createProductApi,
   deleteProduct as deleteProductApi,
@@ -183,11 +183,18 @@ function onFilesSelected(e) {
   previewUrls.value = selectedFiles.value.map(f => URL.createObjectURL(f))
 }
 
+function revokePreviewUrls() {
+  for (const url of previewUrls.value) {
+    URL.revokeObjectURL(url)
+  }
+}
+
 function cancelForm() {
   showForm.value = false
   formError.value = ''
   newProduct.value = { name: '', variants: [{ prompt: '' }] }
   selectedFiles.value = []
+  revokePreviewUrls()
   previewUrls.value = []
   if (fileInput.value) fileInput.value.value = ''
 }
@@ -265,4 +272,5 @@ async function saveProductEdits(name) {
 }
 
 onMounted(load)
+onBeforeUnmount(revokePreviewUrls)
 </script>

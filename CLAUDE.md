@@ -37,3 +37,23 @@ harness 会自动完成：Codex 执行 → 验证 → 飞书通知 → 等待决
 - Runs 目录：`E:\即梦内容工厂\runs\`
 - Runner：Codex 真实执行
 - 超时：10 分钟无回复自动 abort
+
+## 技术栈
+- Backend: Python FastAPI + SQLite + Playwright (CDP browser automation)
+- Frontend: Vue 3 + Vite
+- 多空间浏览器: Chromium-based, CDP port 9222, web API port 3000
+
+## PM2 Services
+
+| Port | Name | Type |
+|------|------|------|
+| 8001 | jimeng-backend-8001 | FastAPI (uvicorn) |
+| 5173 | jimeng-frontend-5173 | Vite (Vue 3) |
+
+**Terminal Commands:**
+```bash
+pm2 start ecosystem.config.cjs   # First time
+pm2 start all                    # After first time
+pm2 stop all / pm2 restart all
+pm2 logs / pm2 status / pm2 monit
+```

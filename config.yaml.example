@@ -32,10 +32,12 @@ providers:
     enabled: true
     base_url: "https://jimeng.jianying.com/ai-tool/home?type=video&workspace=0"
 
-    # 多空间浏览器路径 — 根据实际安装位置修改
-    # 注意：路径必须用单引号，不要用双引号（双引号里反斜杠会被当转义符）
+    # ★★★ 多空间浏览器路径 — 根据实际安装位置修改 ★★★
+    # ★ 重要：路径请用正斜杠 /（不要用反斜杠 \）
+    # ★ 错误: "C:\Users\xxx\多空间浏览器.exe"  ← 反斜杠会报错！
+    # ★ 正确: C:/Users/xxx/多空间浏览器.exe     ← 正斜杠没问题
     space_data_dir: '%APPDATA%/mul-key-chrome/SpaceData'
-    browser_executable_path: 'E:\多空间浏览器\mul-key-chrome\多空间浏览器.exe'
+    browser_executable_path: C:/Users/你的用户名/AppData/Local/Programs/mul-key-chrome/mul-key-chrome.exe
 
     cdp_url: "http://127.0.0.1:9222"  # CDP 调试端口
     web_port: 3000                    # 多空间浏览器控制端口

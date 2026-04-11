@@ -10,7 +10,11 @@
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__take_screenshot",
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_console_messages",
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__get_console_message",
-      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_network_requests"
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_network_requests",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__take_snapshot",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__click",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__get_network_request",
+      "WebFetch(domain:bytedance.larkoffice.com)"
     ]
   }
 }

@@ -180,6 +180,7 @@ const statusColors = {
 }
 
 let timer = null
+let slowTimer = null
 
 const cancellableTasks = computed(() => tasks.value.filter(task => isCancellable(task.status)))
 const allCancellableSelected = computed(() => (
@@ -187,15 +188,9 @@ const allCancellableSelected = computed(() => (
   cancellableTasks.value.every(task => selectedIds.value.includes(task.task_id))
 ))
 
-async function load() {
-  const [taskList, accountList, nextStatus] = await Promise.all([
-    fetchTasks({ status: filterStatus.value, account_name: filterAccount.value }),
-    fetchAccounts(),
-    fetchStatus(),
-  ])
-  tasks.value = taskList
-  accounts.value = accountList
-  status.value = nextStatus
+async function loadTasks() {
+  const res = await fetchTasks({ status: filterStatus.value, account_name: filterAccount.value })
+  tasks.value = res.tasks ?? res
 
   const availableIds = new Set(cancellableTasks.value.map(task => task.task_id))
   selectedIds.value = selectedIds.value.filter(id => availableIds.has(id))
@@ -203,6 +198,16 @@ async function load() {
   if (expandedTaskId.value && !tasks.value.some(task => task.task_id === expandedTaskId.value)) {
     expandedTaskId.value = ''
   }
+}
+
+async function loadSlow() {
+  const [accountList, nextStatus] = await Promise.all([fetchAccounts(), fetchStatus()])
+  accounts.value = accountList
+  status.value = nextStatus
+}
+
+async function load() {
+  await Promise.all([loadTasks(), loadSlow()])
 }
 
 async function stop(taskId) {
@@ -255,8 +260,12 @@ function toggleAll(event) {
 
 onMounted(() => {
   load()
-  timer = setInterval(load, 5000)
+  timer = setInterval(loadTasks, 5000)
+  slowTimer = setInterval(loadSlow, 30000)
 })
 
-onUnmounted(() => clearInterval(timer))
+onUnmounted(() => {
+  clearInterval(timer)
+  clearInterval(slowTimer)
+})
 </script>

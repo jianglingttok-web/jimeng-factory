@@ -46,6 +46,9 @@ _MIGRATIONS = [
     "ALTER TABLE tasks ADD COLUMN submitted_at REAL",
     "ALTER TABLE tasks ADD COLUMN result_url TEXT",
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_space_id ON accounts(space_id)",
+    "CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)",
+    "CREATE INDEX IF NOT EXISTS idx_tasks_account_status ON tasks(account_name, status)",
+    "CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at)",
 ]
 
 
@@ -100,6 +103,29 @@ class Storage:
             connection.commit()
         return record
 
+    def create_tasks_batch(self, tasks: list) -> list[Task]:
+        records = [t if isinstance(t, Task) else Task.model_validate(t) for t in tasks]
+        payloads = [r.model_dump(mode="json") for r in records]
+        with self.connect() as connection:
+            connection.executemany(
+                """
+                INSERT INTO tasks (
+                    task_id, product_name, variant_id, prompt, account_name,
+                    status, result_video_path, error_message, retry_count,
+                    max_retries, created_at, updated_at, submitted_at,
+                    result_url, duration_seconds
+                ) VALUES (
+                    :task_id, :product_name, :variant_id, :prompt, :account_name,
+                    :status, :result_video_path, :error_message, :retry_count,
+                    :max_retries, :created_at, :updated_at, :submitted_at,
+                    :result_url, :duration_seconds
+                )
+                """,
+                payloads,
+            )
+            connection.commit()
+        return records
+
     def get_task(self, task_id: str) -> Task | None:
         with self.connect() as connection:
             row = connection.execute(
@@ -114,6 +140,8 @@ class Storage:
         status: TaskStatus | None = None,
         product_name: str | None = None,
         account_name: str | None = None,
+        limit: int = 200,
+        offset: int = 0,
     ) -> list[Task]:
         query = "SELECT * FROM tasks WHERE 1=1"
         params: list[object] = []
@@ -126,11 +154,21 @@ class Storage:
         if account_name is not None:
             query += " AND account_name = ?"
             params.append(account_name)
-        query += " ORDER BY created_at ASC"
+        query += " ORDER BY created_at ASC LIMIT ? OFFSET ?"
+        params.append(limit)
+        params.append(offset)
 
         with self.connect() as connection:
             rows = connection.execute(query, params).fetchall()
         return [Task.model_validate(dict(row)) for row in rows]
+
+    def count_tasks_by_status(self) -> dict[str, int]:
+        """Count tasks grouped by status in a single query."""
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT status, COUNT(*) as cnt FROM tasks GROUP BY status"
+            ).fetchall()
+        return {row["status"]: row["cnt"] for row in rows}
 
     # ── Atomic state transitions ───────────────────────────────────────────────
 
@@ -444,6 +482,31 @@ class Storage:
                     TaskStatus.GENERATING.value,
                     now,
                     TaskStatus.DOWNLOADING.value,
+                ),
+            )
+            connection.commit()
+
+    def rescue_stale_submitting(self, stale_seconds: int = 300) -> None:
+        """Reset stale SUBMITTING tasks to PENDING before startup recount.
+
+        Only resets tasks that have been SUBMITTING for longer than
+        *stale_seconds* (default 5 min) to avoid resetting genuinely
+        in-flight submissions during hot-reloads.
+        """
+        now = time.time()
+        cutoff = now - stale_seconds
+        with self.connect() as connection:
+            connection.execute(
+                """
+                UPDATE tasks
+                SET status = ?, updated_at = ?
+                WHERE status = ? AND updated_at < ?
+                """,
+                (
+                    TaskStatus.PENDING.value,
+                    now,
+                    TaskStatus.SUBMITTING.value,
+                    cutoff,
                 ),
             )
             connection.commit()

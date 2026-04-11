@@ -2,7 +2,7 @@
 # 运营拿到 ZIP 解压后，运行 setup.ps1 → start.bat 即可
 
 $ROOT = Split-Path -Parent $MyInvocation.MyCommand.Path
-$VERSION = "1.0"
+$VERSION = "5.1"
 $RELEASE_NAME = "jimeng-factory-v$VERSION"
 $OUT_ZIP = "$ROOT\$RELEASE_NAME.zip"
 $TEMP_DIR = "$ROOT\.release-staging\$RELEASE_NAME"
@@ -20,6 +20,8 @@ $EXCLUDE_DIRS = @(
     ".claude",
     ".tmp_validation",
     ".agentbridge",
+    ".worktrees",
+    ".pytest_cache",
     "runs",
     "runtime",
     "outputs",
@@ -28,6 +30,7 @@ $EXCLUDE_DIRS = @(
     "frontend\src",
     "docs\handoffs",
     "scripts",
+    "tests",
     "__pycache__",
     ".release-staging"
 )
@@ -38,6 +41,8 @@ $EXCLUDE_FILES = @(
     "build-release.ps1",
     "CLAUDE.md",
     ".gitignore",
+    "ecosystem.config.cjs",
+    "start.cjs",
     "*.zip",
     "*.pyc"
 )
@@ -64,7 +69,13 @@ if ($LASTEXITCODE -ge 8) {
 
 # 3. 清理暂存目录中的开发残留
 Get-ChildItem -Path $TEMP_DIR -Directory -Recurse -Filter "__pycache__" | Remove-Item -Recurse -Force
+Get-ChildItem -Path $TEMP_DIR -Directory -Recurse -Filter ".pytest_cache" | Remove-Item -Recurse -Force
 Get-ChildItem -Path $TEMP_DIR -File -Recurse -Filter "*.pyc" | Remove-Item -Force
+# 确保 tests/ 和 .worktrees/ 被清理（robocopy /XD 对嵌套路径可能遗漏）
+foreach ($devDir in @("tests", ".worktrees")) {
+    $p = "$TEMP_DIR\$devDir"
+    if (Test-Path $p) { Remove-Item $p -Recurse -Force }
+}
 if (Test-Path "$TEMP_DIR\frontend\node_modules") {
     Remove-Item "$TEMP_DIR\frontend\node_modules" -Recurse -Force
 }

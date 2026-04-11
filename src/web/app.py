@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
-import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -11,13 +9,11 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.auth.init_admin import ensure_admin_user
 from src.config import load_config
 from src.providers.jimeng import JimengProvider
 from src.runtime.harvester import Harvester
 from src.runtime.scheduler import Scheduler
 from src.runtime.storage import Storage
-from src.runtime.user_store import UserStore
 from src.web.routes import router
 
 logger = logging.getLogger(__name__)
@@ -61,26 +57,9 @@ async def lifespan(app: FastAPI):
     storage = Storage(config.paths.database_path)
     storage.init_db()
     storage.rescue_stale_downloads()
+    storage.rescue_stale_submitting()
     storage.rebuild_generating_counts()
 
-    # ── Auth setup ────────────────────────────────────────────────────────────
-    user_store = UserStore(config.paths.database_path)
-    user_store.init_db()
-    ensure_admin_user(user_store)
-
-    if not config.auth.secret_key:
-        env_key = os.environ.get("JIMENG_SECRET_KEY")
-        if env_key:
-            config.auth.secret_key = env_key
-        else:
-            config.auth.secret_key = secrets.token_hex(32)
-            logger.warning(
-                "JIMENG_SECRET_KEY not set — using ephemeral key. "
-                "All tokens will be invalidated on next restart. "
-                "Set JIMENG_SECRET_KEY in environment to persist sessions."
-            )
-
-    app.state.user_store = user_store
 
     provider = JimengProvider(config, config_path)
 
@@ -98,6 +77,23 @@ async def lifespan(app: FastAPI):
         logger.info("Auto-discovered %d account(s) from multi-space browser", len(discovered))
     except Exception as exc:
         logger.warning("Account auto-discovery failed (will retry via /api/accounts/discover): %s", exc)
+
+    if not provider.provider_config.accounts:
+        from src.models.account import AccountStatus
+        db_accounts = storage.get_accounts(status=AccountStatus.ACTIVE)
+        if db_accounts:
+            from src.config import JimengAccountConfig
+            provider.provider_config.accounts = [
+                JimengAccountConfig(
+                    name=a.name,
+                    space_id=a.space_id,
+                    cdp_url=a.cdp_url,
+                    web_port=a.web_port,
+                    max_concurrent=a.max_concurrent,
+                )
+                for a in db_accounts
+            ]
+            logger.info("Loaded %d account(s) from DB as fallback", len(db_accounts))
 
     tasks = [
         asyncio.create_task(_scheduler_loop(scheduler), name="scheduler"),
@@ -126,11 +122,9 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.web.cors_origins,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_headers=["Content-Type"],
     )
-    from src.web.auth_routes import auth_router
-    app.include_router(auth_router)
     app.include_router(router)
     # Serve frontend static files in production (when dist/ exists).
     dist_dir = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"

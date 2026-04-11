@@ -1,6 +1,0 @@
-{
-  "nextStep": "escalate",
-  "reasons": [
-    "Official Codex CLI probe failed: spawn EINVAL"
-  ]
-}

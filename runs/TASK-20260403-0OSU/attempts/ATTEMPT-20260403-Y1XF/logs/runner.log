@@ -1,2 +1,0 @@
-[2026-04-03T08:37:44.972Z] Attempt created for task TASK-20260403-0OSU in workspace E:/即梦内容工厂
-[2026-04-03T08:37:45.093Z] Transport codex-exec probe: unavailable (Codex exclusive lock: 3 codex.exe process(es) already running. Kill existing sessions before dispatching new tasks to prevent cross-project contamination.)

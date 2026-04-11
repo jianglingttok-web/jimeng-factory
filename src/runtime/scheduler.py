@@ -33,7 +33,7 @@ class Scheduler:
         )
 
     async def run_once(self) -> list[str]:
-        accounts = self.storage.get_accounts(status=AccountStatus.ACTIVE)
+        accounts = await asyncio.to_thread(self.storage.get_accounts, status=AccountStatus.ACTIVE)
         # Submit across accounts concurrently — each account's tasks are
         # still sequential (shared browser page), but different accounts
         # run in parallel.
@@ -57,26 +57,29 @@ class Scheduler:
         if slots <= 0:
             return submitted
 
-        for _ in range(slots):
-            tasks = self.storage.claim_pending_tasks(account.name, limit=1)
-            if not tasks:
-                break
-            task = tasks[0]
+        tasks = await asyncio.to_thread(self.storage.claim_pending_tasks, account.name, slots)
+        for task in tasks:
 
             try:
                 acct_cfg = self.provider.get_account(account.name)
             except ValueError as exc:
-                self.storage.mark_submit_failed(
+                await asyncio.to_thread(
+                    self.storage.mark_submit_failed,
                     task.task_id,
-                    f"{type(exc).__name__}: {exc}" or repr(exc),
-                    max_retries=max_retries,
+                    f"{type(exc).__name__}: {exc}",
+                    max_retries=0,
                 )
-                logger.warning("Account lookup failed for %s: %s", account.name, exc)
+                logger.error(
+                    "Account '%s' not in provider config — task %s failed permanently. "
+                    "Run /api/accounts/discover to reload.",
+                    account.name, task.task_id,
+                )
                 continue
 
             image_paths = self._resolve_image_paths(task.product_name)
             if not image_paths:
-                self.storage.mark_submit_failed(
+                await asyncio.to_thread(
+                    self.storage.mark_submit_failed,
                     task.task_id,
                     f"No images found for product '{task.product_name}'",
                     max_retries=max_retries,
@@ -96,7 +99,8 @@ class Scheduler:
                     duration_seconds=task.duration_seconds,
                 )
             except asyncio.CancelledError:
-                self.storage.mark_submit_failed(
+                await asyncio.to_thread(
+                    self.storage.mark_submit_failed,
                     task.task_id,
                     "cancelled",
                     max_retries=max_retries,
@@ -104,19 +108,21 @@ class Scheduler:
                 raise
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Submit failed for task %s", task.task_id)
-                self.storage.mark_submit_failed(
+                await asyncio.to_thread(
+                    self.storage.mark_submit_failed,
                     task.task_id,
-                    f"{type(exc).__name__}: {exc}" or repr(exc),
+                    f"{type(exc).__name__}: {exc}",
                     max_retries=max_retries,
                 )
                 continue
 
             if receipt.ok:
-                self.storage.mark_submit_succeeded(task.task_id, submitted_at=submit_start)
+                await asyncio.to_thread(self.storage.mark_submit_succeeded, task.task_id, submitted_at=submit_start)
                 submitted.append(task.task_id)
                 logger.info("Submitted task %s for account %s", task.task_id, account.name)
             else:
-                self.storage.mark_submit_failed(
+                await asyncio.to_thread(
+                    self.storage.mark_submit_failed,
                     task.task_id,
                     receipt.error or "unknown error",
                     max_retries=max_retries,

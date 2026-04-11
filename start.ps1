@@ -16,14 +16,24 @@ $configLines = Get-Content "$ROOT\config.yaml" -Encoding UTF8
 $BROWSER_EXE = ""
 $CDP_URL = ""
 foreach ($line in $configLines) {
-    if ($line -match '^\s*browser_executable_path:\s*"?([^"#]+)"?') {
+    if ($line -match "^\s*browser_executable_path:\s*[`"']?([^`"'#]+)[`"']?") {
         $BROWSER_EXE = $Matches[1].Trim()
     }
-    if ($line -match '^\s*cdp_url:\s*"?([^"#]+)"?') {
+    if ($line -match "^\s*cdp_url:\s*[`"']?([^`"'#]+)[`"']?") {
         $CDP_URL = $Matches[1].Trim()
     }
 }
 $CDP_PORT = if ($CDP_URL -match ':(\d+)') { $Matches[1] } else { "9222" }
+
+# 检查路径中的反斜杠问题（YAML 双引号里反斜杠会被当转义符）
+$yamlPathBug = $configLines | Where-Object { $_ -match '_path:\s*[''"].*\\' }
+if ($yamlPathBug) {
+    Write-Host "警告：config.yaml 路径包含引号+反斜杠，可能导致 YAML 解析失败" -ForegroundColor Red
+    Write-Host "  解决方法：把路径中的反斜杠 \ 全部改成正斜杠 /" -ForegroundColor Yellow
+    Write-Host "  例如: browser_executable_path: C:/Users/.../mul-key-chrome.exe" -ForegroundColor Green
+    Read-Host "按回车键退出"
+    exit 1
+}
 
 if (-not $BROWSER_EXE -or -not (Test-Path $BROWSER_EXE)) {
     Write-Host "错误：多空间浏览器路径无效 — $BROWSER_EXE" -ForegroundColor Red
@@ -49,12 +59,35 @@ function Test-Port($port) {
 }
 
 # 1. 多空间浏览器
+$WEB_PORT = "3000"
+foreach ($line in $configLines) {
+    if ($line -match '^\s*web_port:\s*(\d+)') {
+        $WEB_PORT = $Matches[1]
+        break
+    }
+}
+
 if (Test-Port $CDP_PORT) {
     Write-Host "多空间浏览器已在运行，跳过。"
 } else {
+    # 清理残留进程占用的 web port（上次崩溃残留）
+    if (Test-Port $WEB_PORT) {
+        Write-Host "检测到端口 $WEB_PORT 被占用，清理残留进程..." -ForegroundColor Yellow
+        $pids = netstat -ano | Select-String "\s+\S+:${WEB_PORT}\s+\S+\s+LISTENING\s+(\d+)" | ForEach-Object {
+            $_.Matches[0].Groups[1].Value
+        } | Where-Object { [int]$_ -gt 4 -and [int]$_ -ne $PID } | Sort-Object -Unique
+        foreach ($pid in $pids) {
+            Write-Host "  终止进程 PID=$pid" -ForegroundColor Yellow
+            Stop-Process -Id ([int]$pid) -Force -ErrorAction SilentlyContinue
+        }
+        if ($pids) { Start-Sleep -Seconds 1 }
+        if (Test-Port $WEB_PORT) {
+            Write-Host "  警告：端口 $WEB_PORT 仍被占用，浏览器可能启动失败" -ForegroundColor Red
+        }
+    }
     Write-Host "启动多空间浏览器 (--remote-debugging-port=$CDP_PORT)..."
     Start-Process -FilePath $BROWSER_EXE -ArgumentList "--remote-debugging-port=$CDP_PORT"
-    Start-Sleep -Seconds 2
+    Start-Sleep -Seconds 3
 }
 
 # 2. FastAPI
@@ -84,7 +117,7 @@ if (Test-Path "$ROOT\frontend\dist\index.html") {
 # 等待 FastAPI 就绪
 Write-Host "等待 FastAPI 启动..." -NoNewline
 $ready = $false
-for ($i = 0; $i -lt 10; $i++) {
+for ($i = 0; $i -lt 20; $i++) {
     Start-Sleep -Seconds 1
     Write-Host "." -NoNewline
     if (Test-Port 8001) { $ready = $true; break }
@@ -96,7 +129,7 @@ if ($ready) {
     Start-Process $OPEN_URL
     Write-Host "所有服务已启动。"
 } else {
-    Write-Host "警告：FastAPI 未能在 10 秒内启动" -ForegroundColor Red
+    Write-Host "警告：FastAPI 未能在 20 秒内启动" -ForegroundColor Red
     Write-Host "  可能原因：" -ForegroundColor Yellow
     Write-Host "  1. 未运行 setup.bat 安装依赖" -ForegroundColor Yellow
     Write-Host "  2. 查看 FastAPI 窗口的错误信息" -ForegroundColor Yellow

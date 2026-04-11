@@ -1,3 +1,0 @@
-Task: TASK-20260402-5BAH
-Attempt: ATTEMPT-20260402-8VAC
-This is a mock artifact produced by the V1 runner.

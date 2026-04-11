@@ -1,55 +1,11 @@
-const TOKEN_KEY = 'jimeng_token'
-
-export function getToken() { return localStorage.getItem(TOKEN_KEY) }
-export function setToken(token) { localStorage.setItem(TOKEN_KEY, token) }
-export function clearToken() { localStorage.removeItem(TOKEN_KEY) }
-export function isAuthenticated() { return !!localStorage.getItem(TOKEN_KEY) }
-
 async function request(path, options = {}) {
-  const token = getToken()
   const headers = { 'Content-Type': 'application/json', ...options.headers }
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-  const res = await fetch(path, {
-    ...options,
-    headers,
-  })
-  if (res.status === 401) {
-    clearToken()
-    window.location.href = '/login'
-    return
-  }
+  const res = await fetch(path, { ...options, headers })
   if (!res.ok) {
     const text = await res.text()
     throw new Error(`${res.status} ${res.statusText}: ${text}`)
   }
   return res.json()
-}
-
-export function login(username, password) {
-  return fetch('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
-  }).then(async (res) => {
-    if (!res.ok) {
-      const text = await res.text()
-      throw new Error(`${res.status} ${res.statusText}: ${text}`)
-    }
-    return res.json()
-  })
-}
-
-export function getMe() {
-  return request('/api/auth/me')
-}
-
-export function changePassword(currentPassword, newPassword) {
-  return request('/api/auth/change-password', {
-    method: 'POST',
-    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
-  })
 }
 
 export function fetchStatus() {

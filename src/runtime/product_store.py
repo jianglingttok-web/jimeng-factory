@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 from pathlib import Path
@@ -66,7 +66,9 @@ def update_product(
         prompt_variants=ensure_variant_ids(variants),
     )
     _write_product_file(Path(data_dir) / name / 'product.json', updated)
-    return get_product(data_dir, name)
+    payload = updated.model_dump(mode='json')
+    payload['revision'] = compute_product_revision(updated)
+    return payload
 
 
 def _read_product_file(product_file: Path) -> dict[str, Any]:

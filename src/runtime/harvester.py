@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 
@@ -27,7 +28,7 @@ class Harvester:
         Returns the number of tasks that were downloaded this cycle.
         """
         max_retries = self.config.video.max_retries
-        generating_tasks = self.storage.list_tasks(status=TaskStatus.GENERATING)
+        generating_tasks = await asyncio.to_thread(self.storage.list_tasks, status=TaskStatus.GENERATING)
         if not generating_tasks:
             return 0
 
@@ -41,8 +42,8 @@ class Harvester:
         for account_name, tasks in by_account.items():
             try:
                 acct_cfg = self.provider.get_account(account_name)
-            except ValueError as exc:
-                logger.warning("Harvester: unknown account %s: %s", account_name, exc)
+            except ValueError:
+                logger.error("Account '%s' not in provider config — skipping harvest", account_name)
                 continue
 
             # Split into: tasks that already have a result_url (retry download)
@@ -58,7 +59,7 @@ class Harvester:
 
             # Consumed URLs: all result_urls already claimed for this account
             # (across all statuses, not just GENERATING) to prevent re-binding.
-            account_tasks = self.storage.list_tasks(account_name=account_name)
+            account_tasks = await asyncio.to_thread(self.storage.list_tasks, account_name=account_name)
             consumed_urls = {
                 task.result_url
                 for task in account_tasks
@@ -99,7 +100,7 @@ class Harvester:
                     seen_urls.add(remote_result.url)
 
                 for task, remote_result in zip(needs_match, fresh_results):
-                    if not self.storage.claim_result_url(task.task_id, remote_result.url):
+                    if not await asyncio.to_thread(self.storage.claim_result_url, task.task_id, remote_result.url):
                         continue  # another process already claimed it
                     downloads.append((task, remote_result))
 
@@ -109,7 +110,7 @@ class Harvester:
                 dest_dir.mkdir(parents=True, exist_ok=True)
 
                 # Mark as downloading before actual download
-                self.storage.update_task_status(task.task_id, TaskStatus.DOWNLOADING)
+                await asyncio.to_thread(self.storage.update_task_status, task.task_id, TaskStatus.DOWNLOADING)
 
                 try:
                     receipt = await self.provider.download_video(
@@ -117,7 +118,8 @@ class Harvester:
                     )
                 except Exception as exc:  # noqa: BLE001
                     logger.exception("Harvester download failed for task %s", task.task_id)
-                    self.storage.mark_download_failed(
+                    await asyncio.to_thread(
+                        self.storage.mark_download_failed,
                         task.task_id,
                         str(exc),
                         max_retries=max_retries,
@@ -125,11 +127,12 @@ class Harvester:
                     continue
 
                 if receipt.ok and receipt.path:
-                    self.storage.mark_download_succeeded(task.task_id, receipt.path)
+                    await asyncio.to_thread(self.storage.mark_download_succeeded, task.task_id, receipt.path)
                     downloaded += 1
                     logger.info("Downloaded task %s → %s", task.task_id, receipt.path)
                 else:
-                    self.storage.mark_download_failed(
+                    await asyncio.to_thread(
+                        self.storage.mark_download_failed,
                         task.task_id,
                         receipt.error or "download returned no path",
                         max_retries=max_retries,
