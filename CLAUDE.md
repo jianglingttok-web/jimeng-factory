@@ -94,3 +94,16 @@ pm2 logs / pm2 status / pm2 monit
 - 浏览器操作必须通过 CDP 连接已有的多空间浏览器账号 space
 - 前端构建后需要重启 PM2 才生效
 - 打包发布用 `build-release.ps1`（自动排除开发文件）
+
+## Codex 全流程集成（强制）
+
+本项目启用 Codex 跨模型验证。所有非琐碎变更必须经过 Codex 审查：
+
+- **规划审查：** `/plan` 完成后 → `/codex` 审查计划
+- **测试审查：** TDD GREEN 后 → `/codex` 审查测试盲点
+- **代码审查：** code-reviewer 后 → `/codex review` 跨模型 diff 审查（pass/fail 门控）
+- **调试验证：** 复杂 bug 修复后 → `/codex challenge` 对抗性验证
+- **架构决策：** 方案选择时 → `/codex challenge` 独立第二意见
+
+跳过条件：琐碎更改、无 diff、明确 opt-out。
+详见 `~/.claude/rules/common/codex-integration.md`。

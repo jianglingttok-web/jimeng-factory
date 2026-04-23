@@ -33,3 +33,6 @@ config.yaml
 # Temp / dev
 .tmp_validation/
 .worktrees/
+.codex-audit.jsonl
+.env
+config.json
