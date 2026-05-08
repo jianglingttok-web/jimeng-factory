@@ -1,7 +1,13 @@
-﻿# start.ps1 - 即梦内容工厂开发环境一键启动
+# start.ps1 - 即梦内容工厂开发环境一键启动
 
 $ROOT = Split-Path -Parent $MyInvocation.MyCommand.Path
 $env:NO_PROXY = "127.0.0.1,localhost"
+$PythonCandidates = @(
+    $env:PYTHON_EXE,
+    (Join-Path $ROOT ".venv\Scripts\python.exe"),
+    "python"
+) | Where-Object { $_ }
+$PythonExe = $PythonCandidates | Where-Object { $_ -eq "python" -or (Test-Path $_) } | Select-Object -First 1
 
 # 前置检查：config.yaml 是否存在
 if (-not (Test-Path "$ROOT\config.yaml")) {
@@ -95,7 +101,7 @@ if (Test-Port 8001) {
     Write-Host "FastAPI 已在运行 (port 8001)，跳过。"
 } else {
     Write-Host "启动 FastAPI (port 8001)..."
-    Start-Process cmd -ArgumentList "/k python -m uvicorn src.web.app:app --host 0.0.0.0 --port 8001" `
+    Start-Process cmd -ArgumentList "/k `"$PythonExe`" -m uvicorn src.web.app:app --host 0.0.0.0 --port 8001" `
         -WorkingDirectory $ROOT -WindowStyle Normal
 }
 
@@ -133,6 +139,6 @@ if ($ready) {
     Write-Host "  可能原因：" -ForegroundColor Yellow
     Write-Host "  1. 未运行 setup.bat 安装依赖" -ForegroundColor Yellow
     Write-Host "  2. 查看 FastAPI 窗口的错误信息" -ForegroundColor Yellow
-    Write-Host "  手动测试: python -m uvicorn src.web.app:app --host 0.0.0.0 --port 8001" -ForegroundColor Yellow
+    Write-Host "  手动测试: `"$PythonExe`" -m uvicorn src.web.app:app --host 0.0.0.0 --port 8001" -ForegroundColor Yellow
     Read-Host "按回车键退出"
 }
