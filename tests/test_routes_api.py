@@ -18,9 +18,11 @@ from fastapi.testclient import TestClient
 
 from src.config import AppConfig, PathsConfig, ProvidersConfig, JimengProviderConfig
 from src.models.account import Account, AccountStatus
+from src.models.user import User, UserRole
 from src.models.product import PromptVariant
 from src.runtime.product_store import create_product
 from src.runtime.storage import Storage
+from src.web.dependencies import get_current_user
 from src.web.routes import router
 
 
@@ -66,6 +68,12 @@ def client(tmp_path):
     app.state.provider = SimpleNamespace(
         provider_config=SimpleNamespace(accounts=[]),
         get_account=lambda name: (_ for _ in ()).throw(ValueError(name)),
+    )
+    app.dependency_overrides[get_current_user] = lambda: User(
+        username="admin",
+        hashed_password="hashed",
+        role=UserRole.admin,
+        is_active=True,
     )
 
     with TestClient(app, raise_server_exceptions=True) as c:

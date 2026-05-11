@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -10,16 +12,33 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import load_config
+from src.auth.init_admin import ensure_admin_user
 from src.providers.jimeng import JimengProvider
 from src.runtime.harvester import Harvester
 from src.runtime.scheduler import Scheduler
 from src.runtime.storage import Storage
+from src.runtime.user_store import UserStore
+from src.web.auth_routes import auth_router
 from src.web.routes import router
 
 logger = logging.getLogger(__name__)
 
 _SCHEDULER_INTERVAL = 5   # seconds between scheduler ticks
 _HARVESTER_INTERVAL = 10  # seconds between harvester ticks
+
+
+def _resolve_auth_secret(config) -> None:
+    if config.auth.secret_key:
+        return
+    env_secret = os.environ.get("JIMENG_SECRET_KEY")
+    if env_secret:
+        config.auth.secret_key = env_secret
+        return
+    config.auth.secret_key = secrets.token_urlsafe(32)
+    logger.warning(
+        "No JIMENG_SECRET_KEY configured. Generated an in-memory JWT secret; "
+        "tokens will be invalid after restart."
+    )
 
 
 async def _scheduler_loop(scheduler: Scheduler) -> None:
@@ -53,6 +72,7 @@ async def lifespan(app: FastAPI):
     # ── Startup ───────────────────────────────────────────────────────────────
     config_path = Path("config.yaml")
     config = load_config(config_path)
+    _resolve_auth_secret(config)
 
     storage = Storage(config.paths.database_path)
     storage.init_db()
@@ -60,6 +80,9 @@ async def lifespan(app: FastAPI):
     storage.rescue_stale_submitting()
     storage.rebuild_generating_counts()
 
+    user_store = UserStore(config.paths.database_path)
+    user_store.init_db()
+    ensure_admin_user(user_store)
 
     provider = JimengProvider(config, config_path)
 
@@ -68,6 +91,7 @@ async def lifespan(app: FastAPI):
 
     app.state.config = config
     app.state.storage = storage
+    app.state.user_store = user_store
     app.state.provider = provider
 
     # Auto-discover accounts from multi-space browser on startup
@@ -123,8 +147,9 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=config.web.cors_origins,
         allow_methods=["GET", "POST", "PUT", "DELETE"],
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", "Authorization"],
     )
+    app.include_router(auth_router)
     app.include_router(router)
     # Serve frontend static files in production (when dist/ exists).
     dist_dir = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
